@@ -20,7 +20,7 @@
   <div id="root"><div class="splash"><img src="icon.svg" alt="" width="56" height="56" /><p id="splash-text"></p></div></div>
   <script>
     // Vänliga laddningstexter medan appen startar – en ny var och en halv sekund.
-    window.LADDNING = ["Vattnar odlingslådorna…", "Vänder komposten…", "Knackar på hos grannarna…", "Kokar kaffe till mötet…", "Laddar solcellerna…", "Lagar cykeln…", "Bakar surdegsbröd…", "Letar fram nycklarna till lokalen…", "Sår fröer…", "Samlar ihop gänget…"];
+    window.LADDNING = ["Startar…", "Hämtar…", "Kopplar upp…", "Synkar…", "Laddar flödet…", "Letar…", "Sorterar…", "Ordnar…", "Snart…", "Klart strax…"];
     (function () {
       var i = Math.floor(Math.random() * LADDNING.length), el = document.getElementById('splash-text');
       function next() { var e = document.getElementById('splash-text'); if (!e) return clearInterval(t); e.textContent = LADDNING[i++ % LADDNING.length]; }
