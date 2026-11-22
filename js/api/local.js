@@ -59,6 +59,7 @@ function shapePost(p) {
     comment_count: cs.length, finance: financeSummary(p, cs), first_comment: firstComment(cs),
     memory_count: (db.memory || []).filter((m) => m.post_id === p.id).length,
     memory_mine: (db.memory || []).some((m) => m.post_id === p.id && m.user_id === db.session),
+    memory_themes: [...new Set((db.memory || []).filter((m) => m.post_id === p.id).map((m) => m.theme || null))],
     rsvp_interested: (db.rsvps || []).filter((r) => r.post_id === p.id && r.status === 'interested').length,
     rsvp_going: (db.rsvps || []).filter((r) => r.post_id === p.id && r.status === 'going').length,
     rsvp_mine: (db.rsvps || []).find((r) => r.post_id === p.id && r.user_id === db.session)?.status || null,
@@ -392,14 +393,15 @@ export const api = {
     return db.posts.filter((p) => p.is_event && p.event_start && new Date(p.event_start) >= today)
       .sort((a, b) => a.event_start.localeCompare(b.event_start)).map(shapePost);
   },
-  async toggleMemory(postId) {
+  async toggleMemory(postId, theme = null) {
     const me = needMe();
     db.memory ||= [];
     const has = db.memory.some((m) => m.post_id === postId && m.user_id === me);
-    db.memory = has ? db.memory.filter((m) => !(m.post_id === postId && m.user_id === me)) : [...db.memory, { post_id: postId, user_id: me, created_at: now() }];
+    db.memory = has ? db.memory.filter((m) => !(m.post_id === postId && m.user_id === me)) : [...db.memory, { post_id: postId, user_id: me, theme: (theme || '').trim() || null, created_at: now() }];
     persist();
     return !has;
   },
+  async listMemoryThemes() { return [...new Set((db.memory || []).map((m) => m.theme).filter(Boolean))]; },
   async setFinanceClosed(id, closed) {
     const p = db.posts.find((x) => x.id === id);
     if (!p || p.author_id !== needMe()) throw new Error('Bara den som postat kan ändra.');

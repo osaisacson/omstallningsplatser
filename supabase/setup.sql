@@ -898,3 +898,5 @@ begin
   end if;
 end $$;
 
+-- ---------- Minne: kategori (017) ----------
+alter table public.memory_votes add column if not exists theme text check (theme is null or length(trim(theme)) between 1 and 40);

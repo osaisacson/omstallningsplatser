@@ -43,7 +43,7 @@ async function upload(file, max = 1280) {
 }
 
 const PROFILE = 'id,name,avatar_url';
-const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles(id,name),group:groups(id,name)), memory_votes(user_id), event_rsvps(user_id,status)`;
+const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles(id,name),group:groups(id,name)), memory_votes(user_id,theme), event_rsvps(user_id,status)`;
 
 function shapePost(p) {
   const cs = p.comments || [];
@@ -54,6 +54,7 @@ function shapePost(p) {
     ...rest, slides: (p.slides || []).sort((a, b) => a.position - b.position), comment_count: cs.length, finance: financeSummary(p, cs),
     first_comment: first ? { body: first.body, author: first.author, group: first.group } : null,
     memory_count: votes.length, memory_mine: votes.some((v) => v.user_id === meId), memory_votes: undefined,
+    memory_themes: [...new Set(votes.map((v) => v.theme || null))],
     rsvp_interested: (p.event_rsvps || []).filter((r) => r.status === 'interested').length,
     rsvp_going: (p.event_rsvps || []).filter((r) => r.status === 'going').length,
     rsvp_mine: (p.event_rsvps || []).find((r) => r.user_id === meId)?.status || null, event_rsvps: undefined,
@@ -288,12 +289,17 @@ export const api = {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     return ok(await sb.from('posts').select(POST_SELECT).eq('is_event', true).gte('event_start', today.toISOString()).order('event_start').limit(300)).map(shapePost);
   },
-  async toggleMemory(postId) {
+  // Spara i Minne med en kategori, eller ta bort om man redan sparat.
+  async toggleMemory(postId, theme = null) {
     const me = needMe();
     const has = ok(await sb.from('memory_votes').select('post_id').eq('post_id', postId).eq('user_id', me)).length > 0;
     if (has) ok(await sb.from('memory_votes').delete().eq('post_id', postId).eq('user_id', me));
-    else ok(await sb.from('memory_votes').insert({ post_id: postId, user_id: me }));
+    else ok(await sb.from('memory_votes').insert({ post_id: postId, user_id: me, theme: (theme || '').trim() || null }));
     return !has;
+  },
+  async listMemoryThemes() {
+    const rows = ok(await sb.from('memory_votes').select('theme').not('theme', 'is', null).limit(2000));
+    return [...new Set(rows.map((r) => r.theme))];
   },
   async setFinanceClosed(id, closed) { ok(await sb.from('posts').update({ fin_closed: !!closed }).eq('id', id)); },
 

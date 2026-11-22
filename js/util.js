@@ -297,3 +297,15 @@ export function googleCalendarUrl(p, url) {
 
 // Har man lagt till kalenderprenumerationen (på den här enheten)?
 export const calendarSubscribed = () => { try { return !!localStorage.getItem('kalender-prenumererar'); } catch { return false; } };
+
+// Minne: kategorier från början (ur beskrivningen av plattformen). Man kan också skapa egna när man sparar.
+export const MEMORY_THEMES = [
+  { name: 'Bygga & bo', about: 'Byggemenskaper, kollektivhus, material och renovering' },
+  { name: 'Mat & odling', about: 'Odling, andelsjordbruk, frön och mat tillsammans' },
+  { name: 'Energi', about: 'Solel, värme och energigemenskaper' },
+  { name: 'Vatten & avfall', about: 'Gråvatten, kompost och kretslopp' },
+  { name: 'Produktion & reparation', about: 'Verkstäder, lagning och lokal tillverkning' },
+  { name: 'Ekonomi & delning', about: 'Finansiering, delningsekonomi och kooperativ' },
+  { name: 'Rättvisa & organisering', about: 'Föreningar, beslut, inkludering och påverkan' },
+  { name: 'Relationer & gemenskap', about: 'Grannskap, möten och att ta hand om varandra' },
+];

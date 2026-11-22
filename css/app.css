@@ -846,3 +846,10 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .mem-saved { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-size: 12px; font-weight: 600; }
 @media (min-width: 760px) { .themes { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .place-btn.open .chev { transform: rotate(180deg); display: inline-block; }
+.theme-hint { margin: 0 0 10px; }
+.theme-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.theme-pick .chip { font-size: 14px; padding: 8px 13px; }
+.theme-pick .chip:hover { background: var(--accent-soft); color: var(--accent); }
+.theme-new { display: flex; gap: 8px; margin-top: 14px; }
+.theme-new input { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-soft); font-size: 16px; }
+.mem-title { margin: 6px 16px 10px; font-size: 22px; } a.theme { color: inherit; }

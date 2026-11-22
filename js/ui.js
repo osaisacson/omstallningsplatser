@@ -2,8 +2,8 @@
 import { html, useState, useEffect, useRef } from './lib.js';
 import { api } from './api/index.js';
 import { SUPABASE_URL } from './config.js';
-import { state, go, goBack, toast, refreshBadges, refreshMe, attempt } from './store.js';
-import { fmtKr, fmtDate, timeAgo, PAYOUT_BANK_LIMIT, SPACE_COSTS, postType, fmtEventTime, eventTitle, calendarSubscribed } from './util.js';
+import { state, go, goBack, toast, refreshBadges, refreshMe, attempt, useAsync } from './store.js';
+import { fmtKr, fmtDate, timeAgo, PAYOUT_BANK_LIMIT, SPACE_COSTS, postType, fmtEventTime, eventTitle, calendarSubscribed, MEMORY_THEMES } from './util.js';
 
 const ICONS = {
   home: '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
@@ -338,23 +338,48 @@ export function EventBox({ post: p }) {
 }
 
 // Spara i långtidsminnet: en röst per person, går att ta tillbaka.
+// Bokmärket: spara inlägget i Minne. Man väljer vilken kategori det passar i (eller skapar en ny).
+// Har man redan sparat det tar ett tryck bort det igen.
 function MemoryButton({ post, onChange }) {
   const [mine, setMine] = useState(!!post.memory_mine);
   const [count, setCount] = useState(post.memory_count || 0);
+  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
-  async function toggle() {
+  async function save(theme) {
     if (busy) return;
-    setBusy(true);
+    setBusy(true); setPicking(false);
     const next = !mine;
     setMine(next); setCount((c) => c + (next ? 1 : -1));   // visa direkt
-    const res = await attempt(async () => { await api.toggleMemory(post.id); return true; }, next ? 'Sparat i långtidsminnet' : 'Borttaget ur långtidsminnet');
+    const res = await attempt(async () => { await api.toggleMemory(post.id, theme); return true; }, next ? `Sparat i Minne under ${theme}` : 'Borttaget ur Minne');
     if (res === false) { setMine(!next); setCount((c) => c + (next ? -1 : 1)); }
     setBusy(false);
     onChange?.();
   }
-  return html`<button class=${'action memory' + (mine ? ' on' : '')} onClick=${toggle} aria-pressed=${mine}
-    aria-label=${mine ? 'Ta bort din röst för långtidsminnet' : 'Spara i långtidsminnet'} title="Spara i långtidsminnet">
-    <span>${count}</span><${Icon} name="memory" size=${22} /></button>`;
+  return html`<span>
+    <button class=${'action memory' + (mine ? ' on' : '')} onClick=${() => (mine ? save(null) : setPicking(true))} aria-pressed=${mine}
+      aria-label=${mine ? 'Ta bort ur Minne' : 'Spara i Minne'} title=${mine ? 'Ta bort ur Minne' : 'Spara i Minne'}>
+      <span>${count}</span><${Icon} name="memory" size=${22} /></button>
+    ${picking && html`<${ThemePicker} onPick=${save} onClose=${() => setPicking(false)} />`}
+  </span>`;
+}
+
+function ThemePicker({ onPick, onClose }) {
+  const custom = useAsync(() => api.listMemoryThemes(), []);
+  const [name, setName] = useState('');
+  const base = MEMORY_THEMES.map((t) => t.name);
+  const extra = (custom.data || []).filter((t) => !base.some((b) => b.toLowerCase() === t.toLowerCase())).sort((a, b) => a.localeCompare(b, 'sv'));
+  const typed = name.trim().replace(/^./, (m) => m.toUpperCase());
+  const exists = [...base, ...extra].find((t) => t.toLowerCase() === typed.toLowerCase());
+  return html`<${Modal} title="Spara i Minne" onClose=${onClose}>
+    <p class="muted small theme-hint">Vilken kategori passar inlägget i?</p>
+    <div class="theme-pick">
+      ${[...base, ...extra].map((t) => html`<button class="chip" onClick=${() => onPick(t)}>${t}</button>`)}
+    </div>
+    <form class="theme-new" onSubmit=${(e) => { e.preventDefault(); if (typed) onPick(exists || typed); }}>
+      <input value=${name} onInput=${(e) => setName(e.target.value)} maxlength="40" placeholder="Eller skapa en ny kategori…" aria-label="Ny kategori" />
+      <button class="btn small primary" disabled=${!typed}>${exists ? 'Välj' : 'Skapa'}</button>
+    </form>
+  <//>`;
 }
 
 // Vem som skrivit inlägget. Personen är avsändaren – gruppen visas som en liten bild på personens bild och
