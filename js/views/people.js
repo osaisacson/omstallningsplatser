@@ -343,7 +343,7 @@ export function EditProfile({ section }) {
       <${ImagePicker} current=${s.me.avatar_url} name=${s.me.name} onFile=${setFile} label="Byt profilbild" />
       <label>Namn<input required value=${name} onInput=${(e) => setName(e.target.value)} /></label>
       <${HomePlaceFields} value=${home} onChange=${setHome} groups=${groups.data} />
-      <small class="muted">Din plats syns bara för dig. Den bestämmer var appen startar.</small>
+      <small class="muted">Ingen kan se var du bor. Platsen bestämmer var appen startar, och stadsdelen kan synas som ett val i platslistan – aldrig kopplad till dig.</small>
       <button class="btn primary block">Spara</button>
     </form>
     <h2 class="settings-title" id="kalender-rubrik">Kalender</h2>

@@ -86,7 +86,7 @@ export function Help() {
     <//>
     <${Section} title="Användarvillkor"><${Terms} /><//>
     <${Section} title="Integritet">
-      <p>Vi samlar bara in det som behövs för att appen ska fungera: namn, e-post, profilbild och det du själv lägger upp. Din plats syns bara för dig.
+      <p>Vi samlar bara in det som behövs för att appen ska fungera: namn, e-post, profilbild och det du själv lägger upp. Ingen kan se var du bor – din stad och stadsdel kan synas som ett val i platslistan, men aldrig kopplat till dig.
         Vi säljer inga uppgifter, har ingen reklam och spårar dig inte.</p>
       <p><a href="integritet.html">Läs hela integritetspolicyn ›</a></p>
     <//>

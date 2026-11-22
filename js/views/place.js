@@ -2,7 +2,7 @@
 // Att kunna se det som händer i en stadsdel, en stad, en region, ett land eller hela världen är kärnan i appen.
 import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
-import { useStore, setPlace } from '../store.js';
+import { useStore, setPlace, onRefresh } from '../store.js';
 import { Sheet } from '../ui.js';
 import { LEVELS, SE_REGIONS, placeLabel, regionName, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
 
@@ -26,26 +26,29 @@ export function placeOptions(groups, extras = []) {
     if (pcKey(g.postcode)) add('district', `${c}|${pcKey(g.postcode)}`, { postcode: fmtPostcode(g.postcode), city: g.city, region: g.region, country: g.country, district: g.district || null }, field);
   };
   for (const g of groups) addAll(g, 'n');
-  for (const x of extras) addAll(x, x.kind === 'home' ? 'home' : 'ev');
+  for (const x of extras) addAll(x, x.kind === 'home' ? 'home' : 'ev');   // ev = annat innehåll än grupper
   const name = (o) => (o.level === 'district' ? o.postcode : o[o.level]);
   const sort = (m) => [...m.values()].sort((a, b) => b.home - a.home || b.n - a.n || b.ev - a.ev || name(a).localeCompare(name(b), 'sv'));
   return { country: sort(maps.country), region: sort(maps.region), city: sort(maps.city), district: sort(maps.district) };
 }
 
-// Platser utan grupper som ändå ska gå att välja: ens egen plats och evenemang med egen adress.
-let eventPlaces = null;
+// Alla platser där det finns något i appen (grupper, evenemang, personer), från databasen.
+// Hämtas en gång och sedan igen när man drar ner för att uppdatera. Ens egen plats märks "Din plats".
+let contentPlaces = null;
 export function usePlaceExtras() {
   const s = useStore();
-  const [events, setEvents] = useState(eventPlaces?.value || []);
+  const [rows, setRows] = useState(contentPlaces?.value || []);
   useEffect(() => {
-    eventPlaces ||= { promise: api.listEvents().catch(() => []).then((list) => list.filter((p) => p.event_city || p.event_postcode)
-      .map((p) => ({ kind: 'event', country: p.event_country || p.group?.country, region: p.event_region, city: p.event_city, postcode: p.event_postcode }))) };
+    const load = () => (contentPlaces = { promise: api.listContentPlaces().catch(() => []) });
+    if (!contentPlaces) load();
     let alive = true;
-    eventPlaces.promise.then((v) => { eventPlaces.value = v; if (alive) setEvents(v); });
-    return () => { alive = false; };
+    const use = () => contentPlaces.promise.then((v) => { contentPlaces.value = v; if (alive) setRows(v); });
+    use();
+    const off = onRefresh(() => { load(); return use(); });
+    return () => { alive = false; off(); };
   }, []);
   const home = s.me?.home?.country ? [{ kind: 'home', ...s.me.home }] : [];
-  return [...home, ...events];
+  return [...home, ...rows.map((x) => ({ kind: 'content', ...x }))];
 }
 
 // Namnen på stadsdelarna hämtas i bakgrunden, ett postnummer i taget. Hittas inget visas bara numret.
@@ -118,15 +121,13 @@ export function PlaceSwitcher({ groups }) {
 }
 
 const PARENT = { country: null, region: 'country', city: 'region', district: 'city' };
-const SEARCH_WORD = { country: 'land', region: 'region', city: 'stad', district: 'stadsdel eller postnummer' };
+const SEARCH_WORD = { country: 'land', region: 'region', city: 'stad', district: 'stadsdel eller postnummer' };   // det man skriver filtrerar listan
 
 // Rullgardinen för en nivå: först det som ligger i nivån ovanför (t.ex. städerna i Västra Götaland),
 // sedan resten i bokstavsordning, hopfällt per region/stad. Skriver man söks allt.
 function PlaceDropdown({ level, place, groups, extras, countries = [], onClose }) {
   const [q, setQ] = useState('');
   const [openGroups, setOpenGroups] = useState({});
-  const [found, setFound] = useState(null);   // postnummer som slagits upp
-  const [named, setNamed] = useState(null);   // stadsdel som slagits upp på namn
   const parentKey = PARENT[level];
   // Bara det som faktiskt finns i appen: grupper, evenemang och ens egen plats (och länderna från databasen).
   let opts = placeOptions(groups, extras)[level];
@@ -151,21 +152,6 @@ function PlaceDropdown({ level, place, groups, extras, countries = [], onClose }
   const isOn = (o) => (level === 'district' ? pcKey(o.postcode) === pcKey(place.postcode) || (o.district && lc(o.district) === lc(place.district)) : lc(o[level]) === lc(place[level]));
 
   useEffect(() => {
-    setFound(null);
-    if (level !== 'district' || digits.length !== 5) return;
-    let alive = true;
-    lookupPostcode(digits, '').then((h) => alive && setFound(h || false));
-    return () => { alive = false; };
-  }, [level, digits]);
-  const nameQ = level === 'district' && !digits && q.trim().length >= 3 && !exact ? q.trim() : '';
-  useEffect(() => {
-    setNamed(null);
-    if (!nameQ) return;
-    let alive = true;
-    const t = setTimeout(() => findDistrict(nameQ, place.city || '', place.country || 'Sverige').then((h) => alive && setNamed(h || false)), 450);
-    return () => { alive = false; clearTimeout(t); };
-  }, [nameQ, place.city]);
-  useEffect(() => {
     const k = (e) => e.key === 'Escape' && onClose();
     addEventListener('keydown', k);
     return () => removeEventListener('keydown', k);
@@ -182,12 +168,6 @@ function PlaceDropdown({ level, place, groups, extras, countries = [], onClose }
     else base[level] = o[level];
     setPlace({ ...base, ...extra });
     onClose();
-  }
-  function pickNamed() {
-    const name = named?.district || nameQ.replace(/^./, (m) => m.toUpperCase());
-    const same = opts.filter((o) => lc(label(o)) === lc(name) && (!place.city || lc(o.city) === lc(place.city))).map((o) => fmtPostcode(o.postcode));
-    const postcodes = [...new Set([named?.postcode, ...same].filter(Boolean))];
-    pick({ district: name, postcode: postcodes[0] || null, postcodes, city: place.city || named?.city, region: place.region || named?.region, country: place.country || named?.country });
   }
   const zoomHere = LEVELS.indexOf(level) < LEVELS.indexOf(place.level);
   const item = (o, sub) => html`<button class=${'dd-item' + (isOn(o) ? ' on' : '')} onClick=${() => pick({ ...o, fromList: true })}>
@@ -206,15 +186,9 @@ function PlaceDropdown({ level, place, groups, extras, countries = [], onClose }
       <div class="dd-list">
         ${zoomHere && !needle && html`<button class="dd-item dd-zoom" onClick=${() => { setPlace({ ...place, level }); onClose(); }}>Visa hela ${crumbName(place, level)}</button>`}
         ${hits ? html`
-          ${level === 'district' && digits.length === 5 && found !== null && html`<button class="dd-item" disabled=${!found}
-            onClick=${() => found && pick({ postcode: fmtPostcode(digits), city: found.city || place.city, region: found.region, country: found.country || place.country }, { district: found.district || null })}>
-            <span>${found ? found.district || `Postnummer ${fmtPostcode(digits)}` : 'Hittar inte det postnumret'}</span>${found && html`<small>${[fmtPostcode(digits), found.city].filter(Boolean).join(' · ')}</small>`}</button>`}
           ${hits.map((o) => item(o, parentKey && groupOf(o)))}
-          ${nameQ && html`<button class="dd-item" onClick=${pickNamed} disabled=${named === null}>
-            <span>${named ? named.district : `Visa ”${nameQ}”`}</span><small>${named === null ? 'Letar…' : named ? [named.postcode, named.city || place.city].filter(Boolean).join(' · ') : 'Hittar ingen sådan stadsdel – visa ändå'}</small></button>`}
-          ${level === 'city' && !exact && html`<button class="dd-item dd-free" onClick=${() => pick({ [level]: q.trim().replace(/^./, (m) => m.toUpperCase()) })}><span>Visa ”${q.trim()}”</span><small>Inget där än</small></button>`}
-          ${!hits.length && level === 'district' && !nameQ && digits.length !== 5 && html`<p class="dd-empty">Skriv hela postnumret (fem siffror) eller namnet på stadsdelen.</p>`}
-          ${!hits.length && (level === 'country' || level === 'region') && html`<p class="dd-empty">Inget sådant finns i appen än.</p>`}`
+          ${!hits.length && html`<p class="dd-empty">Inget sådant finns i appen än.</p>`}
+`
         : html`
           ${near.length > 0 && html`<div class="dd-label">I ${parentKey === 'region' ? regionName(place.region) : place[parentKey]}</div>${near.map((o) => item(o))}`}
           ${flat ? html`${rest.length > 0 && near.length > 0 && html`<div class="dd-label">${REST[level]}</div>`}

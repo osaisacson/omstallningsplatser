@@ -202,6 +202,14 @@ export const api = {
 
   // ---- Grupper ----
   async listPlaces() { return db.groups.map((g) => ({ country: g.country, region: g.region, city: g.city })); },
+  async listContentPlaces() {
+    const rows = [
+      ...db.groups.map((g) => ({ country: g.country, region: g.region, city: g.city, postcode: g.postcode, district: null })),
+      ...db.posts.filter((p) => p.is_event && (p.event_city || p.event_postcode)).map((p) => ({ country: p.event_country || groupOf(p.group_id)?.country, region: p.event_region, city: p.event_city, postcode: p.event_postcode, district: null })),
+      ...db.profiles.filter((p) => p.home?.country).map((p) => ({ country: p.home.country, region: p.home.region, city: p.home.city, postcode: p.home.postcode, district: p.home.district })),
+    ];
+    return rows.filter((r) => r.country);
+  },
   async listCountries() {
     const all = [...db.groups.map((g) => g.country), ...db.posts.filter((p) => p.is_event).map((p) => p.event_country), ...db.profiles.map((p) => p.home?.country)];
     return [...new Set(all.map((c) => (c || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'sv'));

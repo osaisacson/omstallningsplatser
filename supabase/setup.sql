@@ -967,3 +967,18 @@ language sql stable security definer set search_path = public as $$
   ) x where coalesce(btrim(c), '') <> '' order by 1;
 $$;
 grant execute on function public.available_countries() to authenticated;
+
+-- ---------- Platser med innehåll (020) ----------
+create or replace function public.content_places()
+returns table (country text, region text, city text, postcode text, district text)
+language sql stable security definer set search_path = public as $$
+  select distinct nullif(btrim(country), ''), nullif(btrim(region), ''), nullif(btrim(city), ''), nullif(btrim(postcode), ''), nullif(btrim(district), '') from (
+    select country, region, city, postcode, null::text as district from groups
+    union all
+    select coalesce(p.event_country, g.country), p.event_region, p.event_city, p.event_postcode, null
+      from posts p left join groups g on g.id = p.group_id where p.is_event and (p.event_city is not null or p.event_postcode is not null)
+    union all
+    select country, region, city, postcode, district from home_places
+  ) x where coalesce(btrim(country), '') <> '';
+$$;
+grant execute on function public.content_places() to authenticated;

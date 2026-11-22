@@ -165,6 +165,7 @@ export const api = {
 
   // ---- Grupper ----
   async listPlaces() { return ok(await sb.rpc('group_places')); },
+  async listContentPlaces() { return ok(await sb.rpc('content_places')); },
   async listCountries() { return ok(await sb.rpc('available_countries')).map((r) => r.country); },
   async listGroups(q = '') {
     let query = sb.from('groups').select('*, group_members(user_id)').order('last_activity_at', { ascending: false });
