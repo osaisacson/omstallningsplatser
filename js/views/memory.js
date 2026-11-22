@@ -10,7 +10,33 @@ import { PlaceSwitcher } from './place.js';
 
 const NONE = 'Utan kategori';
 const themesOf = (p) => (p.memory_themes?.length ? p.memory_themes : [NONE]);
-const textOf = (p) => [p.caption, ...(p.categories || []), ...(p.slides || []).map((s) => s.text), p.group?.name, p.author?.name].join(' ').toLowerCase();
+const textOf = (p) => [p.caption, ...(p.categories || []), ...(p.space_functions || []), ...(p.slides || []).map((s) => s.text), p.group?.name, p.author?.name].join(' ').toLowerCase();
+
+// Förslag till sökningen: ämnen, grupper och personer i inläggen som finns här (de vanligaste först).
+function suggestions(posts) {
+  const n = new Map();
+  const add = (label, kind) => { if (!label) return; const k = label.toLowerCase(); const x = n.get(k) || { label, kind, n: 0 }; x.n++; n.set(k, x); };
+  for (const p of posts) {
+    for (const c of p.categories || []) add(c, 'Ämne');
+    for (const f of p.space_functions || []) add(f, 'Användning');
+    add(p.group?.name, 'Grupp');
+    add(p.author?.name, 'Person');
+  }
+  return [...n.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label, 'sv'));
+}
+
+// Sökfält där man kan skriva fritt eller välja ett förslag ur listan som öppnas.
+function SearchSuggest({ value, onChange, options, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const n = value.trim().toLowerCase();
+  const hits = options.filter((o) => !n || o.label.toLowerCase().includes(n)).filter((o) => o.label.toLowerCase() !== n).slice(0, 10);
+  return html`<div class="mem-search combo">
+    <input type="search" value=${value} placeholder=${placeholder} aria-label=${placeholder} autocomplete="off"
+      onFocus=${() => setOpen(true)} onBlur=${() => setTimeout(() => setOpen(false), 150)} onInput=${(e) => { onChange(e.target.value); setOpen(true); }} />
+    ${open && hits.length > 0 && html`<span class="combo-list" role="listbox">${hits.map((o) => html`<button type="button" role="option"
+      onMouseDown=${(e) => e.preventDefault()} onClick=${() => { onChange(o.label); setOpen(false); }}>${o.label}<small class="muted"> · ${o.kind}</small></button>`)}</span>`}
+  </div>`;
+}
 
 export function Memory({ theme }) {
   const s = useStore();
@@ -49,7 +75,8 @@ export function Memory({ theme }) {
     ${renaming && html`<${RenameTheme} from=${renaming} onClose=${() => setRenaming(null)}
       onDone=${(to) => { setRenaming(null); themeList.reload(); posts.reload(); if (theme) location.replace('#/minne/' + encodeURIComponent(to)); }} />`}
     ${theme ? html`<h1 class="mem-title">${theme}</h1>` : html`<p class="mem-intro">Lärdomar och goda exempel som är värda att hitta igen. Spara ett inlägg hit med <${Icon} name="memory" size=${13} /> och välj en kategori.</p>`}
-    <div class="mem-search"><input type="search" value=${q} onInput=${(e) => setQ(e.target.value)} placeholder=${theme ? `Sök i ${theme.toLowerCase()}` : 'Sök i minnet'} aria-label="Sök i minnet" /></div>
+    <${SearchSuggest} value=${q} onChange=${setQ} placeholder=${theme ? `Sök i ${theme.toLowerCase()}` : 'Sök i minnet'}
+      options=${suggestions(theme ? saved.filter((p) => themesOf(p).includes(theme)) : saved)} />
     ${posts.loading && !posts.data ? html`<${Loading} />` : posts.error ? html`<${ErrorBox} error=${posts.error} />`
       : !feed ? html`<div class="themes">${all.map((t) => html`<a class="theme" href=${'#/minne/' + encodeURIComponent(t.name)} key=${t.name}>
           ${s.me.is_editor && t.name !== NONE && html`<button class="theme-dots" aria-label=${'Byt namn på ' + t.name} title="Byt namn"
