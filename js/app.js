@@ -10,6 +10,7 @@ import { Notifications, Todos, Inbox, Thread, NewMessage } from './views/inbox.j
 import { MapView } from './views/map.js';
 import { Help, Feedback, FeedbackView } from './views/help.js';
 import { InstallSheet } from './install.js';
+import { Memory } from './views/memory.js';
 
 function parse() {
   let h = location.hash.slice(1);
@@ -25,6 +26,7 @@ function route({ parts: [a, b, c], query }) {
     case 'hjalp': return html`<${Help} />`;
     case 'feedback': return b ? html`<${FeedbackView} id=${b} />` : html`<${Feedback} />`;
     case 'sok': return html`<${Search} tab=${query.get('flik')} />`;
+    case 'minne': return html`<${Memory} />`;
     case 'ny': return html`<${Compose} groupId=${query.get('grupp')} type=${query.get('typ')} />`;
     case 'notiser': return html`<${Notifications} />`;
     case 'karta': return html`<${MapView} />`;
@@ -46,11 +48,12 @@ function BottomNav({ r }) {
   const [a, b] = r.parts;
   // På mobilen en meny längst ner; på surfplatta och dator en meny till vänster med text (se app.css).
   const item = (href, label, on, icon, n, cls = '') => html`<a href=${href} aria-label=${label} title=${label} class=${(on ? 'on ' : '') + cls}>${icon}<${Count} n=${n} /><span class="nav-label">${label}</span></a>`;
-  // Mobilen: Hem, Sök, + (i mitten), ?, Profil. Karta, meddelanden och checklista finns överst i flödet där.
+  // Mobilen: Hem, Minne, + (i mitten), ?, Profil. Sök sitter uppe till höger. Karta, meddelanden och checklista finns överst i flödet där.
   return html`<nav class="bottomnav">
     <a class="nav-logo desk" href="#/" aria-hidden="true" tabindex="-1"><img src="icon.svg" alt="" width="32" height="32" /><span class="nav-label">Omställningsplatser</span></a>
     ${item('#/', 'Hem', !a, html`<${Icon} name="home" size=${26} />`)}
-    ${item('#/sok', 'Sök', a === 'sok', html`<${Icon} name="search" size=${26} />`)}
+    ${item('#/minne', 'Minne', a === 'minne', html`<${Icon} name="memory" size=${26} />`)}
+    ${item('#/sok', 'Sök', a === 'sok', html`<${Icon} name="search" size=${26} />`, 0, 'desk')}
     ${item('#/karta', 'Karta', a === 'karta', html`<${Icon} name="map" size=${26} />`, 0, 'desk')}
     ${item('#/meddelanden', 'Meddelanden', a === 'meddelanden', html`<${Icon} name="chat" size=${26} />`, s.badges.messages, 'desk')}
     ${(s.badges.todos > 0 || s.me.is_editor) && item('#/att-gora', 'Checklista', a === 'att-gora', html`<${Icon} name="check" size=${26} />`, s.badges.todos, 'desk')}

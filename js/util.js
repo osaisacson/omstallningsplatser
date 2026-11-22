@@ -14,10 +14,13 @@ const LEVEL_KEY = { country: 'country', region: 'region', city: 'city', district
 export const pcKey = (p) => String(p || '').replace(/\D/g, '');
 export const fmtPostcode = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 5 ? `${d.slice(0, 3)} ${d.slice(3)}` : String(p || '').trim(); };
 // Har platsen ett värde på den här nivån? (Hela världen har alltid det.)
-export const hasLevel = (place, level) => level === 'world' || !!(place && place[LEVEL_KEY[level]]);
+export const hasLevel = (place, level) => level === 'world' || !!(place && (place[LEVEL_KEY[level]] || (level === 'district' && place.district)));
+// "Västra Götalands län" → "Västra Götaland": ordet län behövs inte och tar plats.
+export const regionName = (r) => String(r || '').replace(/s? län$/i, '').replace(/ län$/i, '');
 export function placeLabel(place) {
   if (!place || place.level === 'world') return 'Hela världen';
   if (place.level === 'district') return place.district || (place.postcode ? fmtPostcode(place.postcode) : 'Stadsdel');
+  if (place.level === 'region') return regionName(place.region) || 'Hela världen';
   return place[place.level] || 'Hela världen';
 }
 export function inPlace(group, place) {
