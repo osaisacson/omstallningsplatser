@@ -106,13 +106,15 @@ export function PlaceSwitcher({ groups }) {
   const only = s.onlyCountry;
   let out = place.level === 'world' ? null : zoomOut(place);
   if (only && out?.level === 'world') out = null;
-  const pickLevel = place.level === 'world' ? 'country' : only && place.level === 'country' ? 'region' : place.level;
+  const pickLevel = place.level === 'world' ? 'country' : place.level;
+  // Finns bara ett land går det inte att byta land: namnet syns men gör inget.
+  const locked = only && pickLevel === 'country';
   return html`<div class="placebar">
       <button class="zoom" disabled=${!out} onClick=${() => setPlace(out)}
         aria-label=${out ? `Zooma ut till ${placeLabel(out)}` : 'Zooma ut'} title=${out ? placeLabel(out) : ''}>‹</button>
-      <button class=${'place-btn' + (open ? ' open' : '')} onClick=${() => setOpen(open ? null : pickLevel)}
-        aria-label=${`Visar ${placeLabel(place)}. Tryck för att byta`}>
-        <span class="place-name">${placeLabel(place)}<span class="chev" aria-hidden="true">▾</span></span>
+      <button class=${'place-btn' + (open ? ' open' : '') + (locked ? ' locked' : '')} onClick=${() => !locked && setOpen(open ? null : pickLevel)}
+        aria-disabled=${locked} aria-label=${locked ? `Visar ${placeLabel(place)}` : `Visar ${placeLabel(place)}. Tryck för att byta`}>
+        <span class="place-name">${placeLabel(place)}${!locked && html`<span class="chev" aria-hidden="true">▾</span>`}</span>
       </button>
       ${next && html`<button class="zoom" onClick=${forward} aria-label=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}
         title=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}>›</button>`}

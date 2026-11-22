@@ -855,3 +855,4 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .mem-title { margin: 6px 16px 10px; font-size: 22px; } a.theme { color: inherit; }
 .sheet-note { margin: 4px 16px 10px; font-size: 12.5px; color: var(--muted); } .memory-page .topbar .mem-menu { margin-left: auto; }
 .dd-group small { font-weight: 400; color: var(--muted); margin-left: 4px; }
+.place-btn.locked { cursor: default; }
