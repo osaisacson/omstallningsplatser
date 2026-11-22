@@ -230,7 +230,7 @@ export function Combo({ label, value, options, onInput, onCommit, placeholder, a
 
 // Var man håller till: land → region → stad → stadsdel (postnummer), och vilken nivå appen ska starta på.
 // Varje fält visas när det förra är ifyllt. value: { country, region, city, postcode, district, level }
-export function HomePlaceFields({ value, onChange, groups }) {
+export function HomePlaceFields({ value, onChange, groups, legend = 'Var håller du till?', chooseLevel = true }) {
   const v = value;
   const [draft, setDraft] = useState({ country: v.country || '', region: v.region || '', city: v.city || '' });
   const [pcState, setPcState] = useState('');
@@ -279,17 +279,17 @@ export function HomePlaceFields({ value, onChange, groups }) {
   const levels = [['country', 'Land'], ['region', 'Region'], ['city', 'Stad'], ['district', 'Stadsdel']];
   const can = (l) => (l === 'district' ? !!(v.postcode && v.postcode.replace(/\D/g, '').length === 5) : !!v[l]);
   return html`<fieldset class="field place-fields home-place">
-    <legend class="label">Var håller du till?</legend>
+    <legend class="label">${legend}</legend>
     <${Combo} label="Land" value=${draft.country} options=${countries} placeholder="Börja skriva, t.ex. Sverige"
       committed=${!!v.country} onInput=${(t) => typing('country', t)} onCommit=${(n) => commit('country', n)} />
     ${v.country && html`<${Combo} label="Region" value=${draft.region} options=${regions} placeholder=${lc(v.country) === 'sverige' ? 'Börja skriva, t.ex. Västra Götalands län' : 'Börja skriva'}
       committed=${!!v.region} onInput=${(t) => typing('region', t)} onCommit=${(n) => commit('region', n)} />`}
     ${v.country && v.region && html`<${Combo} label="Stad" value=${draft.city} options=${cities} placeholder="Börja skriva, t.ex. Göteborg"
       committed=${!!v.city} onInput=${(t) => typing('city', t)} onCommit=${(n) => commit('city', n)} />`}
-    ${v.city && html`<label>Stadsdel <small>(ditt postnummer)</small>
+    ${v.city && html`<label>Stadsdel <small>(${chooseLevel ? 'ditt postnummer' : 'postnummer, valfritt'})</small>
       <input inputmode="numeric" autocomplete="postal-code" value=${v.postcode || ''} placeholder="t.ex. 414 51" onInput=${(e) => postcode(e.target.value)} />
       ${pcState && html`<small class=${'pc-state' + (v.district ? ' ok' : '')}>${pcState}</small>`}</label>`}
-    ${v.city && html`<div class="start-level">
+    ${chooseLevel && v.city && html`<div class="start-level">
       <span class="small">Starta med att se innehåll på den här nivån <span class="muted">(du kan ändra sen)</span></span>
       <div class="seg" role="radiogroup">${levels.map(([l, t]) => html`<button type="button" role="radio" aria-checked=${v.level === l}
         class=${v.level === l ? 'on' : ''} disabled=${!can(l)} onClick=${() => set({ level: l })}>${t}</button>`)}</div>

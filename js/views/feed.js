@@ -10,7 +10,7 @@ import { InstallHint } from '../install.js';
 const PLUS = html`<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 
 export { PlaceSwitcher } from './place.js';
-import { PlaceSwitcher } from './place.js';
+import { PlaceSwitcher, HomePlaceFields, checkHome, emptyHome } from './place.js';
 import { EventsList } from './calendar.js';
 
 // Flödet hämtas 30 inlägg i taget; nästa omgång hämtas när man närmar sig slutet (eller när den valda
@@ -251,6 +251,9 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   const [groupId, setGroupId] = useState(initialGroup && s.memberOf.has(initialGroup) ? initialGroup : myGroups[0]?.id || null);
   const [personal, setPersonal] = useState(false);
   const [asGroup, setAsGroup] = useState(false);   // admins kan publicera som gruppen
+  // Plats för inlägg utan grupp (förifylld med ens egen plats).
+  const [where, setWhere] = useState(() => (s.me.home ? { ...emptyHome(), ...s.me.home, district: null } : emptyHome()));
+  const placeGroups = useAsync(() => api.listGroups(), []);
   const [tags, setTags] = useState([]);
   const [functions, setFunctions] = useState([]);
   const [cost, setCost] = useState('gratis');
@@ -270,6 +273,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       setType(p.is_event ? 'evenemang' : postType(p));
       setSlides(p.slides.map((x) => ({ key: x.id, id: x.id, image_url: x.image_url, preview: x.image_url, text: x.text || '' })));
       setCaption(p.caption || ''); setGroupId(p.group_id); setPersonal(!p.group_id); setAsGroup(!!p.as_group);
+      if (!p.group_id && p.country) setWhere({ ...emptyHome(), country: p.country, region: p.region || '', city: p.city || '', postcode: p.postcode || null });
       setTags(p.categories || []);
       setFunctions(p.space_functions || []); setCost(p.space_cost || 'gratis'); setPrice(p.space_price || '');
       if (p.is_event && p.event_start) {
@@ -301,10 +305,11 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   async function submit(e) {
     e.preventDefault(); setErr('');
     if (type === 'finansiering' && !hadFinance && finEnd && finEnd < plusDays(0)) return setErr('Slutdatumet har redan passerat.');
+    if (isPersonal && checkHome(where)) return setErr(checkHome(where).replace('du håller till i', 'inlägget gäller'));
     setBusy(true);
     try {
       const payload = {
-        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), caption, tags,
+        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), caption, tags,
         slides: slides.map(({ id, file, image_url, text }) => ({ id, file, image_url, text })),
         finance: type === 'finansiering'
           ? { total: Number(String(finTotal).replace(/\s/g, '')), mode: finMode, expiresAt: finEnd ? new Date(finEnd + 'T23:59:59').toISOString() : null }
@@ -378,6 +383,8 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
           ${!isPersonal && s.adminOf.has(groupId) && html`<label class="check as-group">
             <input type="checkbox" checked=${asGroup} onChange=${(e) => setAsGroup(e.target.checked)} />
             <span><b>Publicera som gruppen</b><small>Gruppens namn och bild visas som avsändare, med ”via ${s.me.name}” under. Bara gruppens admins kan välja det här.</small></span></label>`}`}
+      ${isPersonal && html`<${HomePlaceFields} value=${where} onChange=${setWhere} groups=${placeGroups.data} legend="Var gäller inlägget?" chooseLevel=${false} />
+        <small class="muted place-why">Inlägg utan grupp syns på den plats du anger här.</small>`}
       </section>
 
       <section class="field">

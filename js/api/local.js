@@ -205,13 +205,13 @@ export const api = {
   async listContentPlaces() {
     const rows = [
       ...db.groups.map((g) => ({ country: g.country, region: g.region, city: g.city, postcode: g.postcode, district: null })),
-      ...db.posts.filter((p) => p.is_event && (p.event_city || p.event_postcode)).map((p) => ({ country: p.event_country || groupOf(p.group_id)?.country, region: p.event_region, city: p.event_city, postcode: p.event_postcode, district: null })),
+      ...db.posts.filter((p) => !p.group_id && p.country).map((p) => ({ country: p.country, region: p.region, city: p.city, postcode: p.postcode, district: null })),
       ...db.profiles.filter((p) => p.home?.country).map((p) => ({ country: p.home.country, region: p.home.region, city: p.home.city, postcode: p.home.postcode, district: p.home.district })),
     ];
     return rows.filter((r) => r.country);
   },
   async listCountries() {
-    const all = [...db.groups.map((g) => g.country), ...db.posts.filter((p) => p.is_event).map((p) => p.event_country), ...db.profiles.map((p) => p.home?.country)];
+    const all = [...db.groups.map((g) => g.country), ...db.posts.filter((p) => !p.group_id).map((p) => p.country), ...db.profiles.map((p) => p.home?.country)];
     return [...new Set(all.map((c) => (c || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'sv'));
   },
   async listGroups(q = '') {
@@ -340,7 +340,7 @@ export const api = {
     if (v.groupId && !membership(v.groupId, me)) throw new Error('Du kan bara posta i grupper du är med i.');
     const t = now();
     const post = {
-      id: uuid(), author_id: me, group_id: v.groupId, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
+      id: uuid(), author_id: me, group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event),
       fin_total: v.finance?.total ?? null, fin_mode: v.finance?.mode ?? null, fin_expires_at: v.finance?.expiresAt ?? null, fin_closed: false,
       created_at: t, updated_at: t, last_activity_at: t, slides: await buildSlides(v.slides),
@@ -356,7 +356,7 @@ export const api = {
     const v = normalizePostInput(input);
     if (p.fin_total != null && !v.finance) throw new Error('Ett finansieringsinlägg kan inte byta typ. Stäng det i stället via ··· på inlägget.');
     if (v.groupId && v.groupId !== p.group_id && !membership(v.groupId, me)) throw new Error('Du kan bara posta i grupper du är med i.');
-    Object.assign(p, { group_id: v.groupId, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: now(),
+    Object.assign(p, { group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: now(),
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event) });
     if (v.finance) {
       if (p.fin_total == null) Object.assign(p, { fin_total: v.finance.total, fin_mode: v.finance.mode });

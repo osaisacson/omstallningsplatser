@@ -41,23 +41,19 @@ export function inPlace(group, place) {
   return same('country') && !!pcKey(group.postcode) && keys.includes(pcKey(group.postcode));
 }
 // Var ett inlägg hör hemma: ett evenemang med egen plats räknas dit, annars gruppens plats.
-// Saknar evenemangets adress region (eller land) fylls det i från gruppen när det är samma stad,
-// annars från andra platser i appen med samma stad – så att evenemanget hamnar rätt även på regionnivå.
+// Var ett inlägg hör hemma: i gruppens plats (även evenemang – adressen visas men styr inte var det syns).
+// Inlägg utan grupp har en egen plats som angavs när det skrevs (äldre evenemang utan grupp: adressens plats).
 const cityRegion = new Map();
 export function learnCityRegions(rows = []) {
   for (const r of rows) if (r?.city && r?.region) cityRegion.set(`${(r.country || '').toLowerCase()}|${r.city.toLowerCase()}`, r.region);
 }
 export function postPlace(p) {
-  if (p?.event_city || p?.event_postcode) {
-    const g = p.group || {};
-    const country = p.event_country || g.country;
-    const sameCity = (p.event_city || '').toLowerCase() === (g.city || '').toLowerCase();
-    const city = p.event_city || (p.event_postcode && g.city) || null;
-    const region = p.event_region || (sameCity || !p.event_city ? g.region : null)
-      || cityRegion.get(`${(country || '').toLowerCase()}|${(city || '').toLowerCase()}`) || null;
-    return { city, region, country, postcode: p.event_postcode };
-  }
-  return p?.group || null;
+  if (!p) return null;
+  if (p.group) return p.group;
+  const country = p.country || p.event_country, city = p.city || p.event_city;
+  if (!country && !city) return null;
+  return { country, city, postcode: p.postcode || p.event_postcode,
+    region: p.region || p.event_region || cityRegion.get(`${(country || '').toLowerCase()}|${(city || '').toLowerCase()}`) || null };
 }
 // Ett steg utåt (stadsdel → stad → region → land → hela världen). Nivåer som saknas hoppas över.
 // De inre fälten sparas, så att man kan zooma in igen till samma ställe.
@@ -234,7 +230,8 @@ export function normalizePostInput(input) {
     event = { start: start.toISOString(), end: end ? end.toISOString() : null, address: (e.address || '').trim() || null, postcode: e.postcode || null,
       city: e.city || null, region: e.region || null, country: e.country || null, lat: e.lat ?? null, lng: e.lng ?? null, rsvp: e.rsvp !== false };
   }
-  return { groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
+  const place = !input.groupId && input.place ? { country: input.place.country || null, region: input.place.region || null, city: input.place.city || null, postcode: input.place.postcode || null } : null;
+  return { place, groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
 }
 
 export async function resizeImage(file, max = 1280, quality = 0.82) {

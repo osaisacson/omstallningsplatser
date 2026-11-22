@@ -60,6 +60,8 @@ function shapePost(p) {
     rsvp_mine: (p.event_rsvps || []).find((r) => r.user_id === meId)?.status || null, event_rsvps: undefined,
   };
 }
+// Inläggets egen plats används bara när det saknar grupp.
+const placeCols = (v) => ({ country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null });
 // Poäng = upp minus ner; min röst följer med.
 const shapeFeedback = ({ feedback_votes: v = [], feedback_comments: c = [], ...f }) => ({
   ...f, score: v.reduce((n, x) => n + x.value, 0), ups: v.filter((x) => x.value > 0).length, downs: v.filter((x) => x.value < 0).length,
@@ -244,7 +246,7 @@ export const api = {
     const v = normalizePostInput(input);
     await ensureCategories(v.categories);
     const post = ok(await sb.from('posts').insert({
-      author_id: needMe(), group_id: v.groupId, as_group: v.asGroup, caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
+      author_id: needMe(), group_id: v.groupId, as_group: v.asGroup, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event),
       fin_total: v.finance?.total ?? null, fin_mode: v.finance?.mode ?? null, fin_expires_at: v.finance?.expiresAt ?? null,
     }).select('id').single());
@@ -256,7 +258,7 @@ export const api = {
     await ensureCategories(v.categories);
     const current = ok(await sb.from('posts').select('fin_total').eq('id', id).single());
     if (current.fin_total != null && !v.finance) throw new Error('Ett finansieringsinlägg kan inte byta typ. Stäng det i stället via ··· på inlägget.');
-    const patch = { group_id: v.groupId, as_group: v.asGroup, caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: new Date().toISOString(),
+    const patch = { group_id: v.groupId, as_group: v.asGroup, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: new Date().toISOString(),
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event) };
     if (v.finance) {
       if (current.fin_total == null) Object.assign(patch, { fin_total: v.finance.total, fin_mode: v.finance.mode });
