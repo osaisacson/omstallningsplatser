@@ -420,6 +420,14 @@ export const api = {
     db.memoryThemes ??= MEMORY_THEMES.map((t) => t.name);
     return [...db.memoryThemes];
   },
+  async addMemoryTheme(name) {
+    needEditor();
+    const n = (name || '').trim();
+    if (!n || n.length > 40) throw new Error('Skriv ett namn (högst 40 tecken).');
+    db.memoryThemes ??= MEMORY_THEMES.map((t) => t.name);
+    if (!db.memoryThemes.includes(n)) db.memoryThemes.push(n);
+    persist();
+  },
   async renameMemoryTheme(from, to) {
     const me = needEditor();
     const n = (to || '').trim();

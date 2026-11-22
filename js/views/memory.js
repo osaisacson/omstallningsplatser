@@ -20,6 +20,7 @@ export function Memory({ theme }) {
   const [q, setQ] = useState('');
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(null);   // kategorin som byter namn
+  const [adding, setAdding] = useState(false);
   const themeList = useAsync(() => api.listMemoryThemes(), []);
   const saved = (posts.data || []).filter((p) => p.memory_count > 0 && inPlace(postPlace(p), place));
   const n = q.trim().toLowerCase();
@@ -43,6 +44,8 @@ export function Memory({ theme }) {
       <button class="sheet-item" onClick=${() => { setMenu(false); setRenaming(theme); }}>Byt namn på kategorin</button>
       <p class="sheet-note">Vill du ändra ett inläggs kategorier: tryck på ··· på inlägget.</p>
     <//>`}
+    ${adding && html`<${RenameTheme} from="" title="Ny kategori" onClose=${() => setAdding(false)}
+      onDone=${() => { setAdding(false); themeList.reload(); }} />`}
     ${renaming && html`<${RenameTheme} from=${renaming} onClose=${() => setRenaming(null)}
       onDone=${(to) => { setRenaming(null); themeList.reload(); posts.reload(); if (theme) location.replace('#/minne/' + encodeURIComponent(to)); }} />`}
     ${theme ? html`<h1 class="mem-title">${theme}</h1>` : html`<p class="mem-intro">Lärdomar och goda exempel som är värda att hitta igen. Spara ett inlägg hit med <${Icon} name="memory" size=${13} /> och välj en kategori.</p>`}
@@ -51,7 +54,8 @@ export function Memory({ theme }) {
       : !feed ? html`<div class="themes">${all.map((t) => html`<a class="theme" href=${'#/minne/' + encodeURIComponent(t.name)} key=${t.name}>
           ${s.me.is_editor && t.name !== NONE && html`<button class="theme-dots" aria-label=${'Byt namn på ' + t.name} title="Byt namn"
             onClick=${(e) => { e.preventDefault(); e.stopPropagation(); setRenaming(t.name); }}><${Icon} name="dots" size=${18} /></button>`}
-          <strong>${t.name}</strong>${t.about && html`<small>${t.about}</small>`}<span class="theme-n">${count(t.name) || 'Inget än'}</span></a>`)}</div>`
+          <strong>${t.name}</strong>${t.about && html`<small>${t.about}</small>`}<span class="theme-n">${count(t.name) || 'Inget än'}</span></a>`)}
+          ${s.me.is_editor && html`<button class="theme theme-add" onClick=${() => setAdding(true)}><strong>+ Ny kategori</strong><small>Bara Redaktionen</small></button>`}</div>`
       : shown.length ? html`<div class="feed">${shown.map((p) => html`<${PostCard} key=${p.id} post=${p} onChange=${posts.reload} />`)}</div>`
       : html`<p class="empty">Inget sparat ${theme ? `under ${theme.toLowerCase()} ` : ''}${n ? `som matchar ”${q.trim()}” ` : ''}i ${where} än.
           ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> uppe till vänster för att söka i ${placeLabel(zoomOut(place))}.</span>`}</p>`}
@@ -59,17 +63,20 @@ export function Memory({ theme }) {
 }
 
 // Redaktionen byter namn på en kategori. Finns det redan en med det namnet slås de ihop.
-function RenameTheme({ from, onClose, onDone }) {
+// Utan "from" skapar den en ny kategori i stället.
+function RenameTheme({ from, onClose, onDone, title = 'Byt namn på kategorin' }) {
   const [name, setName] = useState(from);
   async function save(e) {
     e.preventDefault();
-    const to = name.trim();
-    if (await attempt(() => api.renameMemoryTheme(from, to), `Kategorin heter nu ${to}`)) onDone(to);
+    const to = name.trim().replace(/^./, (m) => m.toUpperCase());
+    const ok = from ? await attempt(() => api.renameMemoryTheme(from, to), `Kategorin heter nu ${to}`)
+      : await attempt(() => api.addMemoryTheme(to), `Kategorin ${to} är skapad`);
+    if (ok) onDone(to);
   }
-  return html`<${Modal} title="Byt namn på kategorin" onClose=${onClose}>
+  return html`<${Modal} title=${title} onClose=${onClose}>
     <form class="form" onSubmit=${save}>
-      <label>Nytt namn<input required maxlength="40" value=${name} onInput=${(e) => setName(e.target.value)} autofocus /></label>
-      <small class="muted">Alla inlägg i kategorin följer med. Finns det redan en kategori med det namnet slås de ihop.</small>
+      <label>${from ? 'Nytt namn' : 'Namn'}<input required maxlength="40" value=${name} onInput=${(e) => setName(e.target.value)} autofocus /></label>
+      <small class="muted">${from ? 'Alla inlägg i kategorin följer med. Finns det redan en kategori med det namnet slås de ihop.' : 'Kategorin syns för alla när de sparar något i Minne.'}</small>
       <button class="btn primary block" disabled=${!name.trim() || name.trim() === from}>Spara</button>
     </form>
   <//>`;

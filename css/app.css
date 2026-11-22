@@ -867,3 +867,4 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .theme-dots:hover { background: var(--bg-soft); color: var(--text); }
 .theme-pick .chip.on { background: var(--accent); color: #fff; }
 .theme-save { margin-top: 14px; }
+.theme-add { border-style: dashed; align-items: flex-start; } .theme-add strong { color: var(--accent); }

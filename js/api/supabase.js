@@ -306,6 +306,11 @@ export const api = {
   async listMemoryThemes() {
     return ok(await sb.from('memory_themes').select('name').order('position').order('name')).map((r) => r.name);
   },
+  async addMemoryTheme(name) {
+    const n = (name || '').trim();
+    if (!n || n.length > 40) throw new Error('Skriv ett namn (högst 40 tecken).');
+    ok(await sb.from('memory_themes').upsert({ name: n }, { onConflict: 'name', ignoreDuplicates: true }));
+  },
   async renameMemoryTheme(from, to) { ok(await sb.rpc('rename_memory_theme', { p_old: from, p_new: to })); },
   async setPostThemes(postId, themes) { ok(await sb.rpc('set_post_themes', { p_post: postId, p_themes: themes })); },
   async setFinanceClosed(id, closed) { ok(await sb.from('posts').update({ fin_closed: !!closed }).eq('id', id)); },
