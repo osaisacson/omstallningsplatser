@@ -3,7 +3,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshBadges, onRefresh } from '../store.js';
 import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, AddressPicker } from '../ui.js';
-import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
+import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
 
 import { InstallHint } from '../install.js';
 
@@ -310,7 +310,8 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
           ? { total: Number(String(finTotal).replace(/\s/g, '')), mode: finMode, expiresAt: finEnd ? new Date(finEnd + 'T23:59:59').toISOString() : null }
           : null,
         space: type === 'lokal' ? { functions, cost, price } : null,
-        event: type === 'evenemang' ? ev : null,
+        // Saknar adressen region tas den från gruppen (samma stad) eller från andra platser i appen.
+        event: type === 'evenemang' ? (() => { const g = myGroups.find((x) => x.id === groupId); const pl = postPlace({ ...eventColumns(ev), group: isPersonal ? null : g }); return { ...ev, region: ev.region || pl?.region || null, country: ev.country || pl?.country || null }; })() : null,
       };
       if (editing) { await api.updatePost(editId, payload); go('/post/' + editId); }
       else { const id = await api.createPost(payload); refreshBadges(); go('/post/' + id); }

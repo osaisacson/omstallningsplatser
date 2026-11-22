@@ -41,8 +41,22 @@ export function inPlace(group, place) {
   return same('country') && !!pcKey(group.postcode) && keys.includes(pcKey(group.postcode));
 }
 // Var ett inlägg hör hemma: ett evenemang med egen plats räknas dit, annars gruppens plats.
+// Saknar evenemangets adress region (eller land) fylls det i från gruppen när det är samma stad,
+// annars från andra platser i appen med samma stad – så att evenemanget hamnar rätt även på regionnivå.
+const cityRegion = new Map();
+export function learnCityRegions(rows = []) {
+  for (const r of rows) if (r?.city && r?.region) cityRegion.set(`${(r.country || '').toLowerCase()}|${r.city.toLowerCase()}`, r.region);
+}
 export function postPlace(p) {
-  if (p?.event_city || p?.event_postcode) return { city: p.event_city, region: p.event_region, country: p.event_country || p.group?.country, postcode: p.event_postcode };
+  if (p?.event_city || p?.event_postcode) {
+    const g = p.group || {};
+    const country = p.event_country || g.country;
+    const sameCity = (p.event_city || '').toLowerCase() === (g.city || '').toLowerCase();
+    const city = p.event_city || (p.event_postcode && g.city) || null;
+    const region = p.event_region || (sameCity || !p.event_city ? g.region : null)
+      || cityRegion.get(`${(country || '').toLowerCase()}|${(city || '').toLowerCase()}`) || null;
+    return { city, region, country, postcode: p.event_postcode };
+  }
   return p?.group || null;
 }
 // Ett steg utåt (stadsdel → stad → region → land → hela världen). Nivåer som saknas hoppas över.

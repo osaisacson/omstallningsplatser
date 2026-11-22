@@ -4,7 +4,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, setPlace, onRefresh } from '../store.js';
 import { Sheet } from '../ui.js';
-import { LEVELS, SE_REGIONS, placeLabel, regionName, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
+import { learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
 
 const lc = (x) => (x || '').toLowerCase();
 const LEVEL_TITLE = { country: 'land', region: 'region', city: 'stad', district: 'stadsdel' };
@@ -42,7 +42,7 @@ export function usePlaceExtras() {
     const load = () => (contentPlaces = { promise: api.listContentPlaces().catch(() => []) });
     if (!contentPlaces) load();
     let alive = true;
-    const use = () => contentPlaces.promise.then((v) => { contentPlaces.value = v; if (alive) setRows(v); });
+    const use = () => contentPlaces.promise.then((v) => { contentPlaces.value = v; learnCityRegions(v); if (alive) setRows(v); });
     use();
     const off = onRefresh(() => { load(); return use(); });
     return () => { alive = false; off(); };
