@@ -1,7 +1,7 @@
 // Riktig backend: Supabase (Postgres + inloggning + bildlagring). Se supabase/setup.sql för tabeller och regler.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
-import { majorityTheme, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage } from '../util.js';
+import { postThemes, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage } from '../util.js';
 
 // Kommer man hit via länken i ett "återställ lösenord"-mejl står det type=recovery i adressen.
 // Läses av innan Supabase hinner ta bort det.
@@ -54,7 +54,7 @@ function shapePost(p) {
     ...rest, slides: (p.slides || []).sort((a, b) => a.position - b.position), comment_count: cs.length, finance: financeSummary(p, cs),
     first_comment: first ? { body: first.body, author: first.author, group: first.group } : null,
     memory_count: votes.length, memory_mine: votes.some((v) => v.user_id === meId), memory_votes: undefined,
-    memory_theme: p.memory_theme || majorityTheme(votes),
+    memory_themes: postThemes(p, votes),
     rsvp_interested: (p.event_rsvps || []).filter((r) => r.status === 'interested').length,
     rsvp_going: (p.event_rsvps || []).filter((r) => r.status === 'going').length,
     rsvp_mine: (p.event_rsvps || []).find((r) => r.user_id === meId)?.status || null, event_rsvps: undefined,
@@ -307,7 +307,7 @@ export const api = {
     return ok(await sb.from('memory_themes').select('name').order('position').order('name')).map((r) => r.name);
   },
   async renameMemoryTheme(from, to) { ok(await sb.rpc('rename_memory_theme', { p_old: from, p_new: to })); },
-  async setPostTheme(postId, theme) { ok(await sb.rpc('set_post_theme', { p_post: postId, p_theme: theme })); },
+  async setPostThemes(postId, themes) { ok(await sb.rpc('set_post_themes', { p_post: postId, p_themes: themes })); },
   async setFinanceClosed(id, closed) { ok(await sb.from('posts').update({ fin_closed: !!closed }).eq('id', id)); },
 
   // ---- Kommentarer och finansiering ----

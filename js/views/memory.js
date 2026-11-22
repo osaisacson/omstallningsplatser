@@ -9,7 +9,7 @@ import { inPlace, postPlace, placeLabel, zoomOut, MEMORY_THEMES, canZoomOut } fr
 import { PlaceSwitcher } from './place.js';
 
 const NONE = 'Utan kategori';
-const themeOf = (p) => p.memory_theme || NONE;
+const themesOf = (p) => (p.memory_themes?.length ? p.memory_themes : [NONE]);
 const textOf = (p) => [p.caption, ...(p.categories || []), ...(p.slides || []).map((s) => s.text), p.group?.name, p.author?.name].join(' ').toLowerCase();
 
 export function Memory({ theme }) {
@@ -19,17 +19,17 @@ export function Memory({ theme }) {
   const posts = useAsync(() => api.listPosts(), []);
   const [q, setQ] = useState('');
   const [menu, setMenu] = useState(false);
-  const [renaming, setRenaming] = useState(false);
+  const [renaming, setRenaming] = useState(null);   // kategorin som byter namn
   const themeList = useAsync(() => api.listMemoryThemes(), []);
   const saved = (posts.data || []).filter((p) => p.memory_count > 0 && inPlace(postPlace(p), place));
   const n = q.trim().toLowerCase();
   // Kategorierna i den ordning de står i listan; sist inlägg som sparats utan kategori.
   const about = Object.fromEntries(MEMORY_THEMES.map((t) => [t.name, t.about]));
   const names = themeList.data || MEMORY_THEMES.map((t) => t.name);
-  const hasNone = saved.some((p) => !p.memory_theme);
+  const hasNone = saved.some((p) => !p.memory_themes?.length);
   const all = [...names.map((name) => ({ name, about: about[name] || '' })), ...(hasNone ? [{ name: NONE, about: 'Sparat innan man valde kategori' }] : [])];
-  const count = (t) => saved.filter((p) => themeOf(p) === t).length;
-  const shown = saved.filter((p) => (!theme || themeOf(p) === theme) && (!n || textOf(p).includes(n)))
+  const count = (t) => saved.filter((p) => themesOf(p).includes(t)).length;
+  const shown = saved.filter((p) => (!theme || themesOf(p).includes(theme)) && (!n || textOf(p).includes(n)))
     .sort((a, b) => b.memory_count - a.memory_count || b.created_at.localeCompare(a.created_at));
   const where = placeLabel(place);
   const feed = theme || n;
@@ -40,15 +40,17 @@ export function Memory({ theme }) {
       ${theme && theme !== NONE && s.me.is_editor && html`<button class="iconbtn mem-menu" aria-label="Fler val för kategorin" onClick=${() => setMenu(true)}><${Icon} name="dots" /></button>`}
     </header>
     ${menu && html`<${Sheet} onClose=${() => setMenu(false)}>
-      <button class="sheet-item" onClick=${() => { setMenu(false); setRenaming(true); }}>Byt namn på kategorin</button>
-      <p class="sheet-note">Vill du flytta ett inlägg till en annan kategori: tryck på ··· på inlägget.</p>
+      <button class="sheet-item" onClick=${() => { setMenu(false); setRenaming(theme); }}>Byt namn på kategorin</button>
+      <p class="sheet-note">Vill du ändra ett inläggs kategorier: tryck på ··· på inlägget.</p>
     <//>`}
-    ${renaming && html`<${RenameTheme} from=${theme} onClose=${() => setRenaming(false)}
-      onDone=${(to) => { setRenaming(false); themeList.reload(); posts.reload(); location.replace('#/minne/' + encodeURIComponent(to)); }} />`}
+    ${renaming && html`<${RenameTheme} from=${renaming} onClose=${() => setRenaming(null)}
+      onDone=${(to) => { setRenaming(null); themeList.reload(); posts.reload(); if (theme) location.replace('#/minne/' + encodeURIComponent(to)); }} />`}
     ${theme ? html`<h1 class="mem-title">${theme}</h1>` : html`<p class="mem-intro">Lärdomar och goda exempel som är värda att hitta igen. Spara ett inlägg hit med <${Icon} name="memory" size=${13} /> och välj en kategori.</p>`}
     <div class="mem-search"><input type="search" value=${q} onInput=${(e) => setQ(e.target.value)} placeholder=${theme ? `Sök i ${theme.toLowerCase()}` : 'Sök i minnet'} aria-label="Sök i minnet" /></div>
     ${posts.loading && !posts.data ? html`<${Loading} />` : posts.error ? html`<${ErrorBox} error=${posts.error} />`
       : !feed ? html`<div class="themes">${all.map((t) => html`<a class="theme" href=${'#/minne/' + encodeURIComponent(t.name)} key=${t.name}>
+          ${s.me.is_editor && t.name !== NONE && html`<button class="theme-dots" aria-label=${'Byt namn på ' + t.name} title="Byt namn"
+            onClick=${(e) => { e.preventDefault(); e.stopPropagation(); setRenaming(t.name); }}><${Icon} name="dots" size=${18} /></button>`}
           <strong>${t.name}</strong>${t.about && html`<small>${t.about}</small>`}<span class="theme-n">${count(t.name) || 'Inget än'}</span></a>`)}</div>`
       : shown.length ? html`<div class="feed">${shown.map((p) => html`<${PostCard} key=${p.id} post=${p} onChange=${posts.reload} />`)}</div>`
       : html`<p class="empty">Inget sparat ${theme ? `under ${theme.toLowerCase()} ` : ''}${n ? `som matchar ”${q.trim()}” ` : ''}i ${where} än.

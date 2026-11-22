@@ -124,14 +124,13 @@ export function Home({ tab: startTab }) {
       ${TABS.map(([k, label]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => choose(k)}>
         ${label}</button>`)}
     </div>
-    <div class="tab-head">
+    ${tab !== 'flode' && html`<div class="tab-head">
       <div class="tab-info">
         ${tab === 'finansiering' && html`<span class="muted small">Pengar som grupper i ${where} kan söka just nu${available > 0 ? html` – totalt <b class="avail">${fmtKr(available)}</b> tillgängligt` : ''}.</span>`}
         ${tab === 'evenemang' && html`<span class="muted small">Kommande evenemang i ${where}, dag för dag</span>`}
         ${tab === 'lokal' && html`<span class="muted small">Lokaler att låna, använda mot en gentjänst eller hyra i ${where}</span>`}
       </div>
-      ${html`<a class="chip-add" href=${'#/ny?typ=' + (tab === 'flode' ? 'vanlig' : tab)} aria-label=${{ flode: 'Nytt inlägg', finansiering: 'Ny finansiering', lokal: 'Ny lokal', evenemang: 'Nytt evenemang' }[tab]}>${PLUS}</a>`}
-    </div>
+    </div>`}
     ${tab === 'lokal' && html`<div class="space-filters">
       <${FilterCombo} value=${fn} onChange=${setFn} options=${functions} placeholder="Användning" />
       <${FilterCombo} value=${cost} onChange=${setCost} options=${Object.values(SPACE_COSTS)} placeholder="Kostnad" />

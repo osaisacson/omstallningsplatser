@@ -856,3 +856,14 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .sheet-note { margin: 4px 16px 10px; font-size: 12.5px; color: var(--muted); } .memory-page .topbar .mem-menu { margin-left: auto; }
 .dd-group small { font-weight: 400; color: var(--muted); margin-left: 4px; }
 .place-btn.locked { cursor: default; }
+/* Beskrivningen under flikarna: ljusgrön ruta, och ingen alls när fliken saknar text */
+.tab-head { min-height: 0; padding: 10px 16px 6px; }
+.tab-info:empty, .tab-head:has(.tab-info:empty) { display: none; }
+.tab-info { padding: 10px 12px; border-radius: var(--radius); background: var(--accent-soft); }
+.tab-info .muted { color: var(--text); }
+.theme { position: relative; }
+.theme strong { padding-right: 22px; }
+.theme-dots { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--muted); }
+.theme-dots:hover { background: var(--bg-soft); color: var(--text); }
+.theme-pick .chip.on { background: var(--accent); color: #fff; }
+.theme-save { margin-top: 14px; }

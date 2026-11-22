@@ -257,6 +257,31 @@ function RequestForm({ post, kind, onClose }) {
     </form><//>`;
 }
 
+// Redaktionen väljer vilka kategorier i Minne ett inlägg ligger i (flera går bra).
+function ThemesEditor({ post, onClose, onDone }) {
+  const list = useAsync(() => api.listMemoryThemes(), []);
+  const [sel, setSel] = useState(() => post.memory_themes || []);
+  const [name, setName] = useState('');
+  const all = [...new Set([...(list.data || MEMORY_THEMES.map((t) => t.name)), ...sel])];
+  const toggle = (t) => setSel((x) => (x.includes(t) ? x.filter((y) => y !== t) : [...x, t]));
+  function add(e) {
+    e.preventDefault();
+    const t = name.trim().replace(/^./, (m) => m.toUpperCase());
+    if (t && !sel.includes(t)) setSel([...sel, t]);
+    setName('');
+  }
+  async function save() { if (await attempt(() => api.setPostThemes(post.id, sel), 'Kategorierna är sparade')) onDone(); }
+  return html`<${Modal} title="Kategorier i Minne" onClose=${onClose}>
+    <p class="muted small theme-hint">Välj en eller flera. Ditt val gäller före det som valdes när inlägget sparades.</p>
+    <div class="theme-pick">${all.map((t) => html`<button class=${'chip' + (sel.includes(t) ? ' on' : '')} aria-pressed=${sel.includes(t)} onClick=${() => toggle(t)}>${t}</button>`)}</div>
+    <form class="theme-new" onSubmit=${add}>
+      <input value=${name} onInput=${(e) => setName(e.target.value)} maxlength="40" placeholder="Ny kategori…" aria-label="Ny kategori" />
+      <button class="btn small" disabled=${!name.trim()}>Lägg till</button>
+    </form>
+    <button class="btn primary block theme-save" onClick=${save}>Spara</button>
+  <//>`;
+}
+
 // ··· på inlägget
 export function PostMenu({ post, onChange }) {
   const [open, setOpen] = useState(false);
@@ -290,7 +315,7 @@ export function PostMenu({ post, onChange }) {
       if (await editorDelete('post', post.id, 'inlägget')) { if (location.hash.startsWith('#/post/')) go('/'); else onChange?.(); }
     }, 'danger']);
   }
-  if (state.me.is_editor && post.memory_count > 0) items.push(['Flytta i Minne (Redaktionen)', () => setMoving(true)]);
+  if (state.me.is_editor && post.memory_count > 0) items.push(['Kategorier i Minne (Redaktionen)', () => setMoving(true)]);
   if (!location.hash.startsWith('#/post/')) items.push(['Gå till inlägget', () => go('/post/' + post.id)]);
   return html`<span>
     <button class="iconbtn" aria-label="Fler val" onClick=${() => setOpen(true)}><${Icon} name="dots" /></button>
@@ -298,8 +323,7 @@ export function PostMenu({ post, onChange }) {
       ${items.map(([label, fn, cls]) => html`<button class=${'sheet-item ' + (cls || '')} onClick=${() => { setOpen(false); fn(); }}>${label}</button>`)}
     <//>`}
     ${req && html`<${RequestForm} post=${post} kind=${req} onClose=${() => setReq(null)} />`}
-    ${moving && html`<${ThemePicker} title="Flytta i Minne" hint=${`Nu: ${post.memory_theme || 'utan kategori'}. Välj den kategori inlägget ska ligga i.`} current=${post.memory_theme}
-      onClose=${() => setMoving(false)} onPick=${async (t) => { setMoving(false); if (await attempt(() => api.setPostTheme(post.id, t), `Flyttat till ${t}`)) onChange?.(); }} />`}
+    ${moving && html`<${ThemesEditor} post=${post} onClose=${() => setMoving(false)} onDone=${() => { setMoving(false); onChange?.(); }} />`}
     ${reporting && html`<${ReportForm} kind="post" id=${post.id} name=${(post.caption || 'Inlägg').slice(0, 60)} onClose=${() => setReporting(false)} />`}
   </span>`;
 }

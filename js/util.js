@@ -330,3 +330,13 @@ export function majorityTheme(votes = []) {
   for (const [t, x] of by) if (!best || x.n > best.n || (x.n === best.n && x.first < best.first)) best = { t, ...x };
   return best?.t || null;
 }
+
+// Kategorierna ett inlägg ligger i: Redaktionens val om det finns, annars alla som valts när någon sparat det
+// (de som valts av flest först).
+export function postThemes(p, votes = []) {
+  if (p.memory_themes?.length) return [...p.memory_themes];
+  if (p.memory_theme) return [p.memory_theme];
+  const n = new Map();
+  for (const v of votes) if (v.theme) n.set(v.theme, (n.get(v.theme) || 0) + 1);
+  return [...n.keys()].sort((a, b) => n.get(b) - n.get(a));
+}
