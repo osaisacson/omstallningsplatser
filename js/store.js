@@ -1,12 +1,14 @@
 // Liten global state: inloggad användare, mina grupper och siffror på ikonerna.
 import { useState, useEffect, useRef } from './lib.js';
 import { api } from './api/index.js';
-import { placeFromHome } from './util.js';
+import { placeFromHome, setOnlyCountry } from './util.js';
 
 const listeners = new Set();
 // Vald plats för flödet (stad, region, land eller hela världen). Sparas i webbläsaren.
 function loadPlace() { try { return JSON.parse(localStorage.getItem('place')) || null; } catch { return null; } }
 export function setPlace(place) {
+  // Bara ett land: "Hela världen" blir det landet.
+  if (state?.onlyCountry && (!place || place.level === 'world')) place = { level: 'country', country: state.onlyCountry };
   try { localStorage.setItem('place', JSON.stringify(place)); } catch { /* går bra utan */ }
   setState({ place });
 }
@@ -22,6 +24,7 @@ function defaultPlace(groups) {
 
 export const state = {
   place: loadPlace(),
+  countries: [], onlyCountry: null,
   me: null, myGroups: [], memberOf: new Set(), adminOf: new Set(),
   badges: { notifications: 0, messages: 0, todos: 0 }, toast: null,
 };
@@ -75,7 +78,10 @@ export async function refreshMe() {
   const me = await api.getMe();
   setState({ recovering: !!api.isRecovering?.() });
   if (!me) return setState({ me: null, myGroups: [], memberOf: new Set(), adminOf: new Set() });
-  const myGroups = await api.myGroups();
+  const [myGroups, countries] = await Promise.all([api.myGroups(), api.listCountries().catch(() => [])]);
+  const only = countries.length === 1 ? countries[0] : countries.length ? null : 'Sverige';
+  setOnlyCountry(only);
+  setState({ countries, onlyCountry: only });
   const isNew = Date.now() - new Date(me.created_at) < 10 * 60e3;
   const skipped = (() => { try { return !!localStorage.getItem('valkommen-skippad'); } catch { return false; } })();
   if (isNew && !skipped && !myGroups.length && (location.hash === '' || location.hash === '#/')) go('/valkommen');
@@ -84,7 +90,8 @@ export async function refreshMe() {
   let homeFor = null; try { homeFor = localStorage.getItem('place-home'); } catch { /* ok */ }
   const homeKey = home ? me.id + JSON.stringify(home) : null;
   if (home && homeFor !== homeKey) { setPlace(home); try { localStorage.setItem('place-home', homeKey); } catch { /* ok */ } }
-  else if (!state.place) setState({ place: defaultPlace(myGroups) });
+  else if (!state.place) setPlace(defaultPlace(myGroups));
+  else if (only && state.place.level === 'world') setPlace(state.place);
   setState({
     me, myGroups,
     memberOf: new Set(myGroups.map((g) => g.id)),

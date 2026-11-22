@@ -202,6 +202,10 @@ export const api = {
 
   // ---- Grupper ----
   async listPlaces() { return db.groups.map((g) => ({ country: g.country, region: g.region, city: g.city })); },
+  async listCountries() {
+    const all = [...db.groups.map((g) => g.country), ...db.posts.filter((p) => p.is_event).map((p) => p.event_country), ...db.profiles.map((p) => p.home?.country)];
+    return [...new Set(all.map((c) => (c || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'sv'));
+  },
   async listGroups(q = '') {
     const me = db.session; q = q.trim().toLowerCase();
     return clone(db.groups.filter((g) => !q || [g.name, g.description, g.city, g.region, g.country].some((x) => (x || '').toLowerCase().includes(q)))

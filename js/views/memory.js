@@ -5,7 +5,7 @@ import { html, useState } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, goBack, attempt } from '../store.js';
 import { Icon, PostCard, Loading, ErrorBox, Sheet, Modal } from '../ui.js';
-import { inPlace, postPlace, placeLabel, zoomOut, MEMORY_THEMES } from '../util.js';
+import { inPlace, postPlace, placeLabel, zoomOut, MEMORY_THEMES, canZoomOut } from '../util.js';
 import { PlaceSwitcher } from './place.js';
 
 const NONE = 'Utan kategori';
@@ -52,7 +52,7 @@ export function Memory({ theme }) {
           <strong>${t.name}</strong>${t.about && html`<small>${t.about}</small>`}<span class="theme-n">${count(t.name) || 'Inget än'}</span></a>`)}</div>`
       : shown.length ? html`<div class="feed">${shown.map((p) => html`<${PostCard} key=${p.id} post=${p} onChange=${posts.reload} />`)}</div>`
       : html`<p class="empty">Inget sparat ${theme ? `under ${theme.toLowerCase()} ` : ''}${n ? `som matchar ”${q.trim()}” ` : ''}i ${where} än.
-          ${place.level !== 'world' && html`<br /><span class="small">Tryck på <b>‹</b> uppe till vänster för att söka i ${placeLabel(zoomOut(place))}.</span>`}</p>`}
+          ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> uppe till vänster för att söka i ${placeLabel(zoomOut(place))}.</span>`}</p>`}
   </div>`;
 }
 

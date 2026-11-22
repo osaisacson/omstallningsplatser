@@ -23,8 +23,15 @@ export function placeLabel(place) {
   if (place.level === 'region') return regionName(place.region) || 'Hela världen';
   return place[place.level] || 'Hela världen';
 }
+// Finns bara ett land i appen är det den yttersta nivån: inget "Hela världen", och allt räknas dit.
+let onlyCountry = null;
+export function setOnlyCountry(c) { onlyCountry = c || null; }
+export const getOnlyCountry = () => onlyCountry;
+// Går det att zooma ut härifrån? (Inte från hela världen, och inte från landet om det bara finns ett.)
+export const canZoomOut = (place) => !!place && place.level !== 'world' && !(onlyCountry && place.level === 'country');
 export function inPlace(group, place) {
   if (!place || place.level === 'world') return true;
+  if (onlyCountry && place.level === 'country') return true;
   if (!group) return false;  // inlägg utan grupp visas bara för hela världen
   const same = (k) => (group[k] || '').toLowerCase() === (place[k] || '').toLowerCase();
   if (place.level === 'country') return same('country');

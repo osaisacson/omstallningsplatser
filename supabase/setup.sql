@@ -957,3 +957,13 @@ begin
   values (auth.uid(), 'post_theme', p_post, 'flyttade ”' || c || '” till ' || coalesce('”' || n || '”', 'sparade kategorier') || ' i Minne');
 end $$;
 
+-- ---------- Länderna i appen (019) ----------
+create or replace function public.available_countries() returns table (country text)
+language sql stable security definer set search_path = public as $$
+  select distinct btrim(c) from (
+    select country as c from groups
+    union select event_country from posts where is_event
+    union select country from home_places
+  ) x where coalesce(btrim(c), '') <> '' order by 1;
+$$;
+grant execute on function public.available_countries() to authenticated;

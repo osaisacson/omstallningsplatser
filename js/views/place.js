@@ -99,8 +99,11 @@ export function PlaceSwitcher({ groups }) {
     const inner = zoomIn(place);
     if (inner) setPlace(inner); else setOpen(next);
   }
-  const out = place.level === 'world' ? null : zoomOut(place);
-  const pickLevel = place.level === 'world' ? 'country' : place.level;
+  // Finns bara ett land börjar allt där: ingen "Hela världen", och trycker man på landet väljer man region.
+  const only = s.onlyCountry;
+  let out = place.level === 'world' ? null : zoomOut(place);
+  if (only && out?.level === 'world') out = null;
+  const pickLevel = place.level === 'world' ? 'country' : only && place.level === 'country' ? 'region' : place.level;
   return html`<div class="placebar">
       <button class="zoom" disabled=${!out} onClick=${() => setPlace(out)}
         aria-label=${out ? `Zooma ut till ${placeLabel(out)}` : 'Zooma ut'} title=${out ? placeLabel(out) : ''}>‹</button>
@@ -111,7 +114,7 @@ export function PlaceSwitcher({ groups }) {
       ${next && html`<button class="zoom" onClick=${forward} aria-label=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}
         title=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}>›</button>`}
     </div>
-    ${open && html`<${PlaceDropdown} level=${open} place=${place} groups=${groups} extras=${extras} onClose=${() => setOpen(null)} />`}`;
+    ${open && html`<${PlaceDropdown} level=${open} place=${place} groups=${groups} extras=${extras} countries=${s.countries} onClose=${() => setOpen(null)} />`}`;
 }
 
 const PARENT = { country: null, region: 'country', city: 'region', district: 'city' };
@@ -119,20 +122,17 @@ const SEARCH_WORD = { country: 'land', region: 'region', city: 'stad', district:
 
 // Rullgardinen för en nivå: först det som ligger i nivån ovanför (t.ex. städerna i Västra Götaland),
 // sedan resten i bokstavsordning, hopfällt per region/stad. Skriver man söks allt.
-function PlaceDropdown({ level, place, groups, extras, onClose }) {
+function PlaceDropdown({ level, place, groups, extras, countries = [], onClose }) {
   const [q, setQ] = useState('');
   const [openGroups, setOpenGroups] = useState({});
   const [found, setFound] = useState(null);   // postnummer som slagits upp
   const [named, setNamed] = useState(null);   // stadsdel som slagits upp på namn
   const parentKey = PARENT[level];
+  // Bara det som faktiskt finns i appen: grupper, evenemang och ens egen plats (och länderna från databasen).
   let opts = placeOptions(groups, extras)[level];
-  if (level === 'region' && lc(place.country || 'sverige') === 'sverige') {
-    const have = new Set(opts.map((o) => lc(o.region)));
-    opts = [...opts, ...SE_REGIONS.filter((r) => !have.has(lc(r))).map((r) => ({ level: 'region', region: r, country: 'Sverige' }))];
-  }
   if (level === 'country') {
     const have = new Set(opts.map((o) => lc(o.country)));
-    opts = [...opts, ...countryNames().filter((c) => !have.has(lc(c))).map((c) => ({ level: 'country', country: c }))];
+    opts = [...opts, ...countries.filter((c) => !have.has(lc(c))).map((c) => ({ level: 'country', country: c }))];
   }
   const names = useDistrictNames(level === 'district' ? opts.filter((o) => lc(o.city) === lc(place.city)).concat(opts).slice(0, 30) : []);
   const label = (o) => (level === 'district' ? names[pcKey(o.postcode)] || o.district || fmtPostcode(o.postcode) : level === 'region' ? regionName(o.region) : o[level]);
@@ -212,8 +212,9 @@ function PlaceDropdown({ level, place, groups, extras, onClose }) {
           ${hits.map((o) => item(o, parentKey && groupOf(o)))}
           ${nameQ && html`<button class="dd-item" onClick=${pickNamed} disabled=${named === null}>
             <span>${named ? named.district : `Visa ”${nameQ}”`}</span><small>${named === null ? 'Letar…' : named ? [named.postcode, named.city || place.city].filter(Boolean).join(' · ') : 'Hittar ingen sådan stadsdel – visa ändå'}</small></button>`}
-          ${level !== 'district' && !exact && html`<button class="dd-item dd-free" onClick=${() => pick({ [level]: q.trim().replace(/^./, (m) => m.toUpperCase()) })}><span>Visa ”${q.trim()}”</span><small>Inget där än</small></button>`}
-          ${!hits.length && level === 'district' && !nameQ && digits.length !== 5 && html`<p class="dd-empty">Skriv hela postnumret (fem siffror) eller namnet på stadsdelen.</p>`}`
+          ${level === 'city' && !exact && html`<button class="dd-item dd-free" onClick=${() => pick({ [level]: q.trim().replace(/^./, (m) => m.toUpperCase()) })}><span>Visa ”${q.trim()}”</span><small>Inget där än</small></button>`}
+          ${!hits.length && level === 'district' && !nameQ && digits.length !== 5 && html`<p class="dd-empty">Skriv hela postnumret (fem siffror) eller namnet på stadsdelen.</p>`}
+          ${!hits.length && (level === 'country' || level === 'region') && html`<p class="dd-empty">Inget sådant finns i appen än.</p>`}`
         : html`
           ${near.length > 0 && html`<div class="dd-label">I ${parentKey === 'region' ? regionName(place.region) : place[parentKey]}</div>${near.map((o) => item(o))}`}
           ${flat ? html`${rest.length > 0 && near.length > 0 && html`<div class="dd-label">${REST[level]}</div>`}
