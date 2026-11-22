@@ -1,0 +1,25 @@
+-- 025: Adresser, städer, regioner och postnummer för grupper som saknade det (uppslaget i OpenStreetMap).
+-- Bara det som saknades fylls i. Grupper som bara har en ort får inget postnummer (stadens mitt är inte gruppens stadsdel).
+update public.groups set city = coalesce(nullif(city, '') , 'Göteborg'), region = coalesce(region, 'Västra Götalands län'), postcode = coalesce(postcode, '414 65'), address = coalesce(address, 'Koopmansgatan 11A, Stigberget, 414 65 Göteborg'), lat = coalesce(lat, 57.6950698), lng = coalesce(lng, 11.9315198) where id = 'cb0c5f62-e88c-4c4d-a780-56350b4a34ef';
+update public.groups set city = coalesce(nullif(city, '') , 'Tjörn'), region = coalesce(region, 'Västra Götalands län'), postcode = coalesce(postcode, '471 72'), address = coalesce(address, 'Rödgårdarnas väg 9, Röd, 471 72 Tjörns kommun'), lat = coalesce(lat, 58.0328294), lng = coalesce(lng, 11.7111759) where id = '1ac91dbd-602f-4997-ba91-d6b27392065b';
+update public.groups set city = coalesce(nullif(city, '') , 'Uppsala'), region = coalesce(region, 'Uppsala län'), address = coalesce(address, 'Uppsala') where id = '71715209-1fac-4972-9fcb-9cdf94e84bfe';
+update public.groups set city = coalesce(nullif(city, '') , 'Moskosel'), region = coalesce(region, 'Norrbottens län'), address = coalesce(address, 'Moskosel') where id = '5ed5d373-27f5-424a-b2d2-baf266521361';
+update public.groups set city = coalesce(nullif(city, '') , 'Heden'), region = coalesce(region, 'Värmlands län'), postcode = coalesce(postcode, '680 63'), address = coalesce(address, 'Heden') where id = 'd4fb8edb-d01c-451e-9b4c-53f4cfce7455';
+update public.groups set city = coalesce(nullif(city, '') , 'Degerhamn'), region = coalesce(region, 'Kalmar län'), address = coalesce(address, 'Södra Möcklebyvägen 36, Degerhamn') where id = 'bd644eec-2a70-4f2b-a9eb-83e97f29c551';
+update public.groups set city = coalesce(nullif(city, '') , 'Boden'), region = coalesce(region, 'Norrbottens län'), address = coalesce(address, 'Företagsvägen') where id = '49f62e68-66d5-4e88-9629-cba0b836b01c';
+update public.groups set city = coalesce(nullif(city, '') , 'Lund'), region = coalesce(region, 'Skåne län'), address = coalesce(address, 'Lund') where id = '740ba704-78b2-4cd5-aa45-eaac5fbf4f5a';
+update public.groups set city = coalesce(nullif(city, '') , 'Umeå'), region = coalesce(region, 'Västerbottens län'), address = coalesce(address, 'Umeå') where id = 'ca45118b-9ea7-4710-a7a2-5d2d9d757621';
+update public.groups set city = coalesce(nullif(city, '') , 'Lund'), region = coalesce(region, 'Skåne län'), postcode = coalesce(postcode, '247 54'), address = coalesce(address, 'Sandbyvägen 196, 247 54 Dalby') where id = '8e7c6fe7-1bbb-45ca-aa08-c96c67ce7531';
+update public.groups set city = coalesce(nullif(city, '') , 'Härnösand'), region = coalesce(region, 'Västernorrlands län'), postcode = coalesce(postcode, '871 54') where id = '6ae5163d-ab14-4a15-ab06-0c0f4035520f';
+update public.groups set city = coalesce(nullif(city, '') , 'Rengsjö'), region = coalesce(region, 'Gävleborgs län'), address = coalesce(address, 'Rengsjö') where id = '46ed65c4-d6f0-4410-89b8-97d7c34a91d3';
+update public.groups set city = coalesce(nullif(city, '') , 'Smögen'), region = coalesce(region, 'Västra Götalands län'), address = coalesce(address, 'Smögen') where id = 'ecfac141-179e-4e39-83f9-50810392f2c8';
+update public.groups set city = coalesce(nullif(city, '') , 'Eskilstuna'), region = coalesce(region, 'Södermanlands län'), address = coalesce(address, 'Eskilstuna') where id = '79b5a6e5-dd73-4529-94fc-c589ad08fdc1';
+update public.groups set city = coalesce(nullif(city, '') , 'Kalix'), region = coalesce(region, 'Norrbottens län'), address = coalesce(address, 'Köpmangatan 1') where id = '823c06a0-fd0a-48a2-b31f-b6dcbaf664a9';
+update public.groups set city = coalesce(nullif(city, '') , 'Skålan'), region = coalesce(region, 'Jämtlands län'), address = coalesce(address, 'Skålan') where id = 'a41b7a14-d724-442c-9e1f-ef3ccc9b73ab';
+update public.groups set city = coalesce(nullif(city, '') , 'Ramsele'), region = coalesce(region, 'Västernorrlands län'), address = coalesce(address, 'Ramsele distrikt') where id = 'fb8137c7-cd67-4164-b508-e1531887f7da';
+update public.groups set city = coalesce(nullif(city, '') , 'Vassbotten'), region = coalesce(region, 'Västra Götalands län'), address = coalesce(address, 'Vassbotten') where id = '9b732874-0f10-48cb-9feb-c6b311381ba7';
+update public.groups set city = coalesce(nullif(city, '') , 'Tjörn'), region = coalesce(region, 'Västra Götalands län'), postcode = coalesce(postcode, '471 94'), address = coalesce(address, 'Sundsbyvägen, 471 94 Kållekärr') where id = 'c061c0ed-2efb-41fb-a37c-dc9db3a3039e';
+update public.groups set city = 'Tjörn' where city = 'Tjörns kommun';
+select count(*) filter (where region is null and name <> 'Omställningsplatser') as utan_region,
+       count(*) filter (where city is null and name <> 'Omställningsplatser') as utan_stad,
+       count(*) filter (where postcode is null) as utan_postnummer from public.groups;
