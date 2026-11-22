@@ -337,6 +337,6 @@ export function postThemes(p, votes = []) {
   if (p.memory_themes?.length) return [...p.memory_themes];
   if (p.memory_theme) return [p.memory_theme];
   const n = new Map();
-  for (const v of votes) if (v.theme) n.set(v.theme, (n.get(v.theme) || 0) + 1);
+  for (const v of votes) for (const t of v.themes?.length ? v.themes : v.theme ? [v.theme] : []) n.set(t, (n.get(t) || 0) + 1);
   return [...n.keys()].sort((a, b) => n.get(b) - n.get(a));
 }

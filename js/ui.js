@@ -373,39 +373,46 @@ function MemoryButton({ post, onChange }) {
   const [count, setCount] = useState(post.memory_count || 0);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
-  async function save(theme) {
+  async function save(themes) {
     if (busy) return;
     setBusy(true); setPicking(false);
     const next = !mine;
     setMine(next); setCount((c) => c + (next ? 1 : -1));   // visa direkt
-    const res = await attempt(async () => { await api.toggleMemory(post.id, theme); return true; }, next ? `Sparat i Minne under ${theme}` : 'Borttaget ur Minne');
+    const res = await attempt(async () => { await api.toggleMemory(post.id, themes); return true; }, next ? `Sparat i Minne under ${themes.join(', ')}` : 'Borttaget ur Minne');
     if (res === false) { setMine(!next); setCount((c) => c + (next ? -1 : 1)); }
     setBusy(false);
     onChange?.();
   }
   return html`<span>
-    <button class=${'action memory' + (mine ? ' on' : '')} onClick=${() => (mine ? save(null) : setPicking(true))} aria-pressed=${mine}
+    <button class=${'action memory' + (mine ? ' on' : '')} onClick=${() => (mine ? save([]) : setPicking(true))} aria-pressed=${mine}
       aria-label=${mine ? 'Ta bort ur Minne' : 'Spara i Minne'} title=${mine ? 'Ta bort ur Minne' : 'Spara i Minne'}>
       <span>${count}</span><${Icon} name="memory" size=${22} /></button>
     ${picking && html`<${ThemePicker} onPick=${save} onClose=${() => setPicking(false)} />`}
   </span>`;
 }
 
-export function ThemePicker({ onPick, onClose, title = 'Spara i Minne', hint = 'Vilken kategori passar inlägget i?', current = null }) {
+// Välj en eller flera kategorier när man sparar i Minne (eller skapa en ny).
+export function ThemePicker({ onPick, onClose, title = 'Spara i Minne', hint = 'Vilka kategorier passar inlägget i? Välj en eller flera.' }) {
   const list = useAsync(() => api.listMemoryThemes(), []);
+  const [sel, setSel] = useState([]);
   const [name, setName] = useState('');
-  const all = list.data || MEMORY_THEMES.map((t) => t.name);
-  const typed = name.trim().replace(/^./, (m) => m.toUpperCase());
-  const exists = all.find((t) => t.toLowerCase() === typed.toLowerCase());
+  const all = [...new Set([...(list.data || MEMORY_THEMES.map((t) => t.name)), ...sel])];
+  const toggle = (t) => setSel((x) => (x.includes(t) ? x.filter((y) => y !== t) : [...x, t]));
+  function add(e) {
+    e.preventDefault();
+    const t = name.trim().replace(/^./, (m) => m.toUpperCase());
+    const exists = all.find((x) => x.toLowerCase() === t.toLowerCase());
+    if (t) setSel((x) => [...new Set([...x, exists || t])]);
+    setName('');
+  }
   return html`<${Modal} title=${title} onClose=${onClose}>
     <p class="muted small theme-hint">${hint}</p>
-    <div class="theme-pick">
-      ${all.map((t) => html`<button class=${'chip' + (t === current ? ' on' : '')} onClick=${() => onPick(t)}>${t}</button>`)}
-    </div>
-    <form class="theme-new" onSubmit=${(e) => { e.preventDefault(); if (typed) onPick(exists || typed); }}>
+    <div class="theme-pick">${all.map((t) => html`<button class=${'chip' + (sel.includes(t) ? ' on' : '')} aria-pressed=${sel.includes(t)} onClick=${() => toggle(t)}>${t}</button>`)}</div>
+    <form class="theme-new" onSubmit=${add}>
       <input value=${name} onInput=${(e) => setName(e.target.value)} maxlength="40" placeholder="Eller skapa en ny kategori…" aria-label="Ny kategori" />
-      <button class="btn small primary" disabled=${!typed}>${exists ? 'Välj' : 'Skapa'}</button>
+      <button class="btn small" disabled=${!name.trim()}>Lägg till</button>
     </form>
+    <button class="btn primary block theme-save" disabled=${!sel.length} onClick=${() => onPick(sel)}>${sel.length ? `Spara i ${sel.length === 1 ? sel[0] : `${sel.length} kategorier`}` : 'Välj minst en kategori'}</button>
   <//>`;
 }
 

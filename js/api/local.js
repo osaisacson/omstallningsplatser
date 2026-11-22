@@ -405,13 +405,14 @@ export const api = {
     return db.posts.filter((p) => p.is_event && p.event_start && new Date(p.event_start) >= today)
       .sort((a, b) => a.event_start.localeCompare(b.event_start)).map(shapePost);
   },
-  async toggleMemory(postId, theme = null) {
+  async toggleMemory(postId, themes = []) {
     const me = needMe();
     db.memory ||= [];
+    const list = [...new Set((Array.isArray(themes) ? themes : [themes]).map((t) => (t || '').trim()).filter(Boolean))];
     const has = db.memory.some((m) => m.post_id === postId && m.user_id === me);
-    db.memory = has ? db.memory.filter((m) => !(m.post_id === postId && m.user_id === me)) : [...db.memory, { post_id: postId, user_id: me, theme: (theme || '').trim() || null, created_at: now() }];
+    db.memory = has ? db.memory.filter((m) => !(m.post_id === postId && m.user_id === me)) : [...db.memory, { post_id: postId, user_id: me, theme: list[0] || null, themes: list, created_at: now() }];
     db.memoryThemes ??= MEMORY_THEMES.map((t) => t.name);
-    if (theme && !db.memoryThemes.includes(theme.trim())) db.memoryThemes.push(theme.trim());
+    for (const t of list) if (!db.memoryThemes.includes(t)) db.memoryThemes.push(t);
     persist();
     return !has;
   },
@@ -425,7 +426,7 @@ export const api = {
     if (!n || n.length > 40) throw new Error('Skriv ett namn (högst 40 tecken).');
     db.memoryThemes ??= MEMORY_THEMES.map((t) => t.name);
     db.memoryThemes = db.memoryThemes.includes(n) ? db.memoryThemes.filter((t) => t !== from) : db.memoryThemes.map((t) => (t === from ? n : t));
-    for (const m of db.memory || []) if (m.theme === from) m.theme = n;
+    for (const m of db.memory || []) { if (m.theme === from) m.theme = n; if (m.themes) m.themes = [...new Set(m.themes.map((t) => (t === from ? n : t)))]; }
     for (const p of db.posts) { if (p.memory_theme === from) p.memory_theme = n; if (p.memory_themes) p.memory_themes = [...new Set(p.memory_themes.map((t) => (t === from ? n : t)))]; }
     log(me, 'theme_rename', null, `bytte namn på kategorin ”${from}” till ”${n}” i Minne`);
     persist();

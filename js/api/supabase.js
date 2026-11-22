@@ -43,7 +43,7 @@ async function upload(file, max = 1280) {
 }
 
 const PROFILE = 'id,name,avatar_url';
-const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles(id,name),group:groups(id,name)), memory_votes(user_id,theme,created_at), event_rsvps(user_id,status)`;
+const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles(id,name),group:groups(id,name)), memory_votes(user_id,theme,themes,created_at), event_rsvps(user_id,status)`;
 
 function shapePost(p) {
   const cs = p.comments || [];
@@ -292,14 +292,14 @@ export const api = {
     return ok(await sb.from('posts').select(POST_SELECT).eq('is_event', true).gte('event_start', today.toISOString()).order('event_start').limit(300)).map(shapePost);
   },
   // Spara i Minne med en kategori, eller ta bort om man redan sparat.
-  async toggleMemory(postId, theme = null) {
+  async toggleMemory(postId, themes = []) {
     const me = needMe();
     const has = ok(await sb.from('memory_votes').select('post_id').eq('post_id', postId).eq('user_id', me)).length > 0;
     if (has) ok(await sb.from('memory_votes').delete().eq('post_id', postId).eq('user_id', me));
     else {
-      const t = (theme || '').trim() || null;
-      if (t) await sb.from('memory_themes').upsert({ name: t }, { onConflict: 'name', ignoreDuplicates: true });
-      ok(await sb.from('memory_votes').insert({ post_id: postId, user_id: me, theme: t }));
+      const list = [...new Set((Array.isArray(themes) ? themes : [themes]).map((t) => (t || '').trim()).filter(Boolean))];
+      if (list.length) await sb.from('memory_themes').upsert(list.map((name) => ({ name })), { onConflict: 'name', ignoreDuplicates: true });
+      ok(await sb.from('memory_votes').insert({ post_id: postId, user_id: me, theme: list[0] || null, themes: list.length ? list : null }));
     }
     return !has;
   },
