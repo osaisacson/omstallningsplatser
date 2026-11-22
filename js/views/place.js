@@ -66,9 +66,9 @@ function useDistrictNames(list) {
   return names;
 }
 
-// Platsraden överst: Världen › Sverige › Västra Götaland › Göteborg › Majorna ›
-// Varje led öppnar en rullgardin med alternativen på den nivån (skriv för att söka, eller välj direkt).
-// › längst till höger går ett steg inåt – från hela världen till ens egen plats (eller Majorna i Göteborg).
+// Platsen överst: ‹ Göteborg ›. ‹ zoomar ut ett steg. Trycker man på namnet öppnas en rullgardin med
+// alternativen på samma nivå (andra städer osv.) – skriv för att söka eller välj direkt.
+// › går ett steg inåt – från hela världen till ens egen plats (eller Majorna i Göteborg).
 const DEFAULT_PLACE = { level: 'district', country: 'Sverige', region: 'Västra Götalands län', city: 'Göteborg', district: 'Majorna', postcode: null, postcodes: [] };
 const crumbName = (place, l) => (l === 'region' ? regionName(place.region) : l === 'district' ? place.district || fmtPostcode(place.postcode) : place[l]);
 
@@ -77,10 +77,8 @@ export function PlaceSwitcher({ groups }) {
   const place = s.place || { level: 'world' };
   const [open, setOpen] = useState(null);   // nivån vars rullgardin är öppen
   const extras = usePlaceExtras();
-  const bar = useRef();
   const depth = LEVELS.indexOf(place.level);
   const next = LEVELS[depth + 1];
-  useEffect(() => { if (bar.current) bar.current.scrollLeft = bar.current.scrollWidth; }, [place.level, placeLabel(place)]);
   // En stadsdel som bara har postnummer får sitt namn (t.ex. 752 25 → Luthagen) när det går att slå upp.
   useEffect(() => {
     if (place.level !== 'district' || place.district || !place.postcode) return;
@@ -101,15 +99,16 @@ export function PlaceSwitcher({ groups }) {
     const inner = zoomIn(place);
     if (inner) setPlace(inner); else setOpen(next);
   }
-  const levels = LEVELS.slice(1, depth + 1).filter((l) => hasLevel(place, l));
+  const out = place.level === 'world' ? null : zoomOut(place);
+  const pickLevel = place.level === 'world' ? 'country' : place.level;
   return html`<div class="placebar">
-      <div class="crumbs" ref=${bar}>
-        <button class=${'crumb' + (place.level === 'world' ? ' cur' : '')} onClick=${() => setPlace({ ...place, level: 'world' })}>Världen</button>
-        ${levels.map((l) => html`<span class="crumb-sep" aria-hidden="true">›</span>
-          <button class=${'crumb' + (l === place.level ? ' cur' : '') + (open === l ? ' open' : '')} onClick=${() => setOpen(open === l ? null : l)}
-            aria-label=${`${LEVEL_TITLE[l]}: ${crumbName(place, l)}. Tryck för att byta`}>${crumbName(place, l)}</button>`)}
-      </div>
-      ${next && html`<button class="zoom-in" onClick=${forward} aria-label=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}
+      <button class="zoom" disabled=${!out} onClick=${() => setPlace(out)}
+        aria-label=${out ? `Zooma ut till ${placeLabel(out)}` : 'Zooma ut'} title=${out ? placeLabel(out) : ''}>‹</button>
+      <button class=${'place-btn' + (open ? ' open' : '')} onClick=${() => setOpen(open ? null : pickLevel)}
+        aria-label=${`Visar ${placeLabel(place)}. Tryck för att byta`}>
+        <span class="place-name">${placeLabel(place)}<span class="chev" aria-hidden="true">▾</span></span>
+      </button>
+      ${next && html`<button class="zoom" onClick=${forward} aria-label=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}
         title=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}>›</button>`}
     </div>
     ${open && html`<${PlaceDropdown} level=${open} place=${place} groups=${groups} extras=${extras} onClose=${() => setOpen(null)} />`}`;
