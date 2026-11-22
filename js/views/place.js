@@ -175,7 +175,9 @@ function PlaceDropdown({ level, place, groups, extras, onClose }) {
   function pick(o, extra = {}) {
     const keep = { country: [], region: ['country'], city: ['country', 'region'], district: ['country', 'region', 'city'] }[level];
     const base = { level };
-    for (const k of keep) base[k] = (k in o && o[k] ? o[k] : place[k]) ?? null;
+    // Ett val ur listan tar med sin egen region och sitt land (Arvidsjaur byter region till Norrbotten);
+    // något man skrivit själv behåller platsen man var på.
+    for (const k of keep) base[k] = (o.fromList ? o[k] : k in o && o[k] ? o[k] : place[k]) ?? null;
     if (level === 'district') Object.assign(base, { postcode: o.postcode || null, district: names[pcKey(o.postcode)] || o.district || null, postcodes: o.postcodes || [] });
     else base[level] = o[level];
     setPlace({ ...base, ...extra });
@@ -188,13 +190,15 @@ function PlaceDropdown({ level, place, groups, extras, onClose }) {
     pick({ district: name, postcode: postcodes[0] || null, postcodes, city: place.city || named?.city, region: place.region || named?.region, country: place.country || named?.country });
   }
   const zoomHere = LEVELS.indexOf(level) < LEVELS.indexOf(place.level);
-  const item = (o, sub) => html`<button class=${'dd-item' + (isOn(o) ? ' on' : '')} onClick=${() => pick(o)}>
+  const item = (o, sub) => html`<button class=${'dd-item' + (isOn(o) ? ' on' : '')} onClick=${() => pick({ ...o, fromList: true })}>
     <span>${label(o)}</span>${sub && html`<small>${sub}</small>`}${o.home && html`<small class="dd-home">Din plats</small>`}</button>`;
   // Resten hopfällt per region (för städer), per stad (för stadsdelar) eller per land (för regioner).
   const grouped = {};
   for (const o of rest) (grouped[groupOf(o)] ||= []).push(o);
   const groupNames = Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'sv'));
-  const flat = level === 'country';
+  const flat = level !== 'district';
+  const REST = { country: 'Andra länder', region: 'Andra länder', city: 'Resten av landet' };
+  const count = (n) => `${n} ${n === 1 ? 'stadsdel' : 'stadsdelar'}`;
   return html`<div class="dd-bg" onClick=${(e) => e.target === e.currentTarget && onClose()}>
     <div class="dd" role="dialog" aria-label=${`Välj ${LEVEL_TITLE[level]}`}>
       <input class="dd-search" type="search" autofocus value=${q} onInput=${(e) => setQ(e.target.value)}
@@ -212,10 +216,12 @@ function PlaceDropdown({ level, place, groups, extras, onClose }) {
           ${!hits.length && level === 'district' && !nameQ && digits.length !== 5 && html`<p class="dd-empty">Skriv hela postnumret (fem siffror) eller namnet på stadsdelen.</p>`}`
         : html`
           ${near.length > 0 && html`<div class="dd-label">I ${parentKey === 'region' ? regionName(place.region) : place[parentKey]}</div>${near.map((o) => item(o))}`}
-          ${flat ? rest.sort(sortName).map((o) => item(o))
-            : groupNames.map((g) => html`<button class="dd-group" aria-expanded=${!!openGroups[g]} onClick=${() => setOpenGroups((x) => ({ ...x, [g]: !x[g] }))}>
-                <span>${g}</span><span class="dd-chev">${openGroups[g] ? '▾' : '▸'}</span></button>
-              ${openGroups[g] && grouped[g].sort(sortName).map((o) => item(o))}`)}`}
+          ${flat ? html`${rest.length > 0 && near.length > 0 && html`<div class="dd-label">${REST[level]}</div>`}
+              ${rest.sort(sortName).map((o) => item(o, parentKey && groupOf(o)))}`
+            : html`${groupNames.length > 0 && html`<div class="dd-label">Andra städer</div>`}
+              ${groupNames.map((g) => html`<button class="dd-group" aria-expanded=${!!openGroups[g]} onClick=${() => setOpenGroups((x) => ({ ...x, [g]: !x[g] }))}>
+                <span>${g} <small>${count(grouped[g].length)}</small></span><span class="dd-chev">${openGroups[g] ? '▾' : '▸'}</span></button>
+              ${openGroups[g] && grouped[g].sort(sortName).map((o) => item(o))}`)}`}`}
       </div>
     </div>
   </div>`;

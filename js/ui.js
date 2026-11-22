@@ -262,6 +262,7 @@ export function PostMenu({ post, onChange }) {
   const [open, setOpen] = useState(false);
   const [req, setReq] = useState(null);
   const [reporting, setReporting] = useState(false);
+  const [moving, setMoving] = useState(false);
   const mine = post.author_id === state.me.id;
   const editor = state.me.is_editor;
   const admin = post.group_id && state.adminOf.has(post.group_id);
@@ -289,6 +290,7 @@ export function PostMenu({ post, onChange }) {
       if (await editorDelete('post', post.id, 'inlägget')) { if (location.hash.startsWith('#/post/')) go('/'); else onChange?.(); }
     }, 'danger']);
   }
+  if (state.me.is_editor && post.memory_count > 0) items.push(['Flytta i Minne (Redaktionen)', () => setMoving(true)]);
   if (!location.hash.startsWith('#/post/')) items.push(['Gå till inlägget', () => go('/post/' + post.id)]);
   return html`<span>
     <button class="iconbtn" aria-label="Fler val" onClick=${() => setOpen(true)}><${Icon} name="dots" /></button>
@@ -296,6 +298,8 @@ export function PostMenu({ post, onChange }) {
       ${items.map(([label, fn, cls]) => html`<button class=${'sheet-item ' + (cls || '')} onClick=${() => { setOpen(false); fn(); }}>${label}</button>`)}
     <//>`}
     ${req && html`<${RequestForm} post=${post} kind=${req} onClose=${() => setReq(null)} />`}
+    ${moving && html`<${ThemePicker} title="Flytta i Minne" hint=${`Nu: ${post.memory_theme || 'utan kategori'}. Välj den kategori inlägget ska ligga i.`} current=${post.memory_theme}
+      onClose=${() => setMoving(false)} onPick=${async (t) => { setMoving(false); if (await attempt(() => api.setPostTheme(post.id, t), `Flyttat till ${t}`)) onChange?.(); }} />`}
     ${reporting && html`<${ReportForm} kind="post" id=${post.id} name=${(post.caption || 'Inlägg').slice(0, 60)} onClose=${() => setReporting(false)} />`}
   </span>`;
 }
@@ -363,17 +367,16 @@ function MemoryButton({ post, onChange }) {
   </span>`;
 }
 
-function ThemePicker({ onPick, onClose }) {
-  const custom = useAsync(() => api.listMemoryThemes(), []);
+export function ThemePicker({ onPick, onClose, title = 'Spara i Minne', hint = 'Vilken kategori passar inlägget i?', current = null }) {
+  const list = useAsync(() => api.listMemoryThemes(), []);
   const [name, setName] = useState('');
-  const base = MEMORY_THEMES.map((t) => t.name);
-  const extra = (custom.data || []).filter((t) => !base.some((b) => b.toLowerCase() === t.toLowerCase())).sort((a, b) => a.localeCompare(b, 'sv'));
+  const all = list.data || MEMORY_THEMES.map((t) => t.name);
   const typed = name.trim().replace(/^./, (m) => m.toUpperCase());
-  const exists = [...base, ...extra].find((t) => t.toLowerCase() === typed.toLowerCase());
-  return html`<${Modal} title="Spara i Minne" onClose=${onClose}>
-    <p class="muted small theme-hint">Vilken kategori passar inlägget i?</p>
+  const exists = all.find((t) => t.toLowerCase() === typed.toLowerCase());
+  return html`<${Modal} title=${title} onClose=${onClose}>
+    <p class="muted small theme-hint">${hint}</p>
     <div class="theme-pick">
-      ${[...base, ...extra].map((t) => html`<button class="chip" onClick=${() => onPick(t)}>${t}</button>`)}
+      ${all.map((t) => html`<button class=${'chip' + (t === current ? ' on' : '')} onClick=${() => onPick(t)}>${t}</button>`)}
     </div>
     <form class="theme-new" onSubmit=${(e) => { e.preventDefault(); if (typed) onPick(exists || typed); }}>
       <input value=${name} onInput=${(e) => setName(e.target.value)} maxlength="40" placeholder="Eller skapa en ny kategori…" aria-label="Ny kategori" />

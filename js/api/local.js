@@ -1,7 +1,7 @@
 // Demoläge: samma funktioner som supabase.js men allt sparas i webbläsarens localStorage.
 // Reglerna här speglar reglerna i supabase/setup.sql.
 import { materializeSeed } from '../seed.js';
-import { financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage, blobToDataURL } from '../util.js';
+import { majorityTheme, MEMORY_THEMES, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage, blobToDataURL } from '../util.js';
 
 const KEY = 'omstallningsplatser-demo-v7';
 // Demodata sparad under appens gamla namn flyttas över.
@@ -59,7 +59,7 @@ function shapePost(p) {
     comment_count: cs.length, finance: financeSummary(p, cs), first_comment: firstComment(cs),
     memory_count: (db.memory || []).filter((m) => m.post_id === p.id).length,
     memory_mine: (db.memory || []).some((m) => m.post_id === p.id && m.user_id === db.session),
-    memory_themes: [...new Set((db.memory || []).filter((m) => m.post_id === p.id).map((m) => m.theme || null))],
+    memory_theme: p.memory_theme || majorityTheme((db.memory || []).filter((m) => m.post_id === p.id)),
     rsvp_interested: (db.rsvps || []).filter((r) => r.post_id === p.id && r.status === 'interested').length,
     rsvp_going: (db.rsvps || []).filter((r) => r.post_id === p.id && r.status === 'going').length,
     rsvp_mine: (db.rsvps || []).find((r) => r.post_id === p.id && r.user_id === db.session)?.status || null,
@@ -398,10 +398,36 @@ export const api = {
     db.memory ||= [];
     const has = db.memory.some((m) => m.post_id === postId && m.user_id === me);
     db.memory = has ? db.memory.filter((m) => !(m.post_id === postId && m.user_id === me)) : [...db.memory, { post_id: postId, user_id: me, theme: (theme || '').trim() || null, created_at: now() }];
+    db.memoryThemes ??= MEMORY_THEMES.map((t) => t.name);
+    if (theme && !db.memoryThemes.includes(theme.trim())) db.memoryThemes.push(theme.trim());
     persist();
     return !has;
   },
-  async listMemoryThemes() { return [...new Set((db.memory || []).map((m) => m.theme).filter(Boolean))]; },
+  async listMemoryThemes() {
+    db.memoryThemes ??= MEMORY_THEMES.map((t) => t.name);
+    return [...db.memoryThemes];
+  },
+  async renameMemoryTheme(from, to) {
+    const me = needEditor();
+    const n = (to || '').trim();
+    if (!n || n.length > 40) throw new Error('Skriv ett namn (högst 40 tecken).');
+    db.memoryThemes ??= MEMORY_THEMES.map((t) => t.name);
+    db.memoryThemes = db.memoryThemes.includes(n) ? db.memoryThemes.filter((t) => t !== from) : db.memoryThemes.map((t) => (t === from ? n : t));
+    for (const m of db.memory || []) if (m.theme === from) m.theme = n;
+    for (const p of db.posts) if (p.memory_theme === from) p.memory_theme = n;
+    log(me, 'theme_rename', null, `bytte namn på kategorin ”${from}” till ”${n}” i Minne`);
+    persist();
+  },
+  async setPostTheme(postId, theme) {
+    const me = needEditor();
+    const p = db.posts.find((x) => x.id === postId);
+    if (!p) throw new Error('Inlägget finns inte.');
+    db.memoryThemes ??= MEMORY_THEMES.map((t) => t.name);
+    if (theme && !db.memoryThemes.includes(theme)) db.memoryThemes.push(theme);
+    p.memory_theme = theme || null;
+    log(me, 'post_theme', postId, `flyttade ”${(p.caption || 'inlägg').slice(0, 50)}” till ”${theme}” i Minne`);
+    persist();
+  },
   async setFinanceClosed(id, closed) {
     const p = db.posts.find((x) => x.id === id);
     if (!p || p.author_id !== needMe()) throw new Error('Bara den som postat kan ändra.');

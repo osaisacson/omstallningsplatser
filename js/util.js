@@ -309,3 +309,17 @@ export const MEMORY_THEMES = [
   { name: 'Rättvisa & organisering', about: 'Föreningar, beslut, inkludering och påverkan' },
   { name: 'Relationer & gemenskap', about: 'Grannskap, möten och att ta hand om varandra' },
 ];
+
+// Vilken kategori ett inlägg hör till i Minne: den flest valt när de sparade det; vid lika den som valdes först.
+export function majorityTheme(votes = []) {
+  const by = new Map();
+  for (const v of votes) {
+    if (!v.theme) continue;
+    const x = by.get(v.theme) || { n: 0, first: v.created_at || '' };
+    x.n++; if ((v.created_at || '') < x.first) x.first = v.created_at;
+    by.set(v.theme, x);
+  }
+  let best = null;
+  for (const [t, x] of by) if (!best || x.n > best.n || (x.n === best.n && x.first < best.first)) best = { t, ...x };
+  return best?.t || null;
+}
