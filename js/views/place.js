@@ -77,20 +77,33 @@ function useDistrictNames(list) {
 const DEFAULT_PLACE = { level: 'district', country: 'Sverige', region: 'Västra Götalands län', city: 'Göteborg', district: 'Majorna', postcode: null, postcodes: [] };
 const crumbName = (place, l) => (l === 'region' ? regionName(place.region) : l === 'district' ? place.district || fmtPostcode(place.postcode) : place[l]);
 
-// Hela namnet ska alltid synas: långa namn radbryts (högst två rader) och texten krymper tills den får plats.
+// Fältet är lika brett som namnet (Sverige, Göteborg), men aldrig bredare än att alla ikoner till höger syns.
+// Får namnet inte plats radbryts det (högst två rader) och texten krymper tills det får plats.
 function useFitText(text) {
   const ref = useRef();
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    const bar = el?.closest('.topbar');
+    if (!el || !bar) return;
     const fit = () => {
+      const place = el.closest('.placebar');
+      const cs = getComputedStyle(bar);
+      const gap = parseFloat(cs.columnGap) || 0;
+      let others = 0;
+      for (const c of bar.children) if (c !== place && getComputedStyle(c).display !== 'none') others += c.getBoundingClientRect().width + gap;
+      for (const c of place.children) if (!c.contains(el)) others += c.getBoundingClientRect().width;
+      const avail = Math.max(60, bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - others - 4);
       let size = 16;
-      el.style.fontSize = size + 'px';
-      while (size > 11 && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) el.style.fontSize = --size + 'px';
+      Object.assign(el.style, { maxWidth: avail + 'px', fontSize: size + 'px', whiteSpace: 'nowrap' });
+      if (el.scrollWidth <= avail) return;
+      el.style.whiteSpace = 'normal';
+      while (size > 9 && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) el.style.fontSize = --size + 'px';
     };
     fit();
-    addEventListener('resize', fit);
-    return () => removeEventListener('resize', fit);
+    const ro = new ResizeObserver(fit);
+    ro.observe(bar);
+    for (const c of bar.children) ro.observe(c);   // t.ex. när Redaktionens checklista dyker upp
+    return () => ro.disconnect();
   }, [text]);
   return ref;
 }
@@ -135,7 +148,7 @@ export function PlaceSwitcher({ groups }) {
         aria-label=${out ? `Zooma ut till ${placeLabel(out)}` : 'Zooma ut'} title=${out ? placeLabel(out) : ''}>‹</button>
       <button class=${'place-btn' + (open ? ' open' : '') + (locked ? ' locked' : '')} onClick=${() => !locked && setOpen(open ? null : pickLevel)}
         aria-disabled=${locked} aria-label=${locked ? `Visar ${placeLabel(place)}` : `Visar ${placeLabel(place)}. Tryck för att byta`}>
-        <span class="place-name" ref=${nameRef}>${placeLabel(place)}${!locked && html`<span class="chev" aria-hidden="true">▾</span>`}</span>
+        <span class="place-name" ref=${nameRef}>${placeLabel(place)}</span>
       </button>
       ${next && html`<button class="zoom" onClick=${forward} aria-label=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}
         title=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}>›</button>`}

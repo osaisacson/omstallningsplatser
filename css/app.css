@@ -904,9 +904,6 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .admin-nudge .btn { margin-top: 2px; }
 /* Profilbilden i menyn i linje med ikonerna */
 .nav-avatar, .nav-avatar .avatar { display: grid; }
-.topbar.brand .placebar { flex: 1 1 0; }
-.placebar .place-btn { flex: 1 1 0; }
-.placebar .place-name { width: 100%; }
 /* Smal skärm: tätare ikoner i toppraden så att platsnamnet får plats */
 @media (max-width: 480px) {
   .topbar.brand { gap: 4px; padding-left: 8px; padding-right: 4px; }
@@ -925,3 +922,9 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 /* Bli admin: knappen till höger */
 .admin-nudge .btn { align-self: flex-end; }
 .sheet-item:disabled { color: var(--muted); cursor: default; }
+
+/* Platsfältet: lika brett som namnet, ikonerna till höger krymper aldrig (bredden räknas ut i useFitText) */
+.topbar.brand .placebar, .placebar { flex: 0 1 auto; min-width: 0; }
+.placebar .place-btn { flex: 0 1 auto; min-width: 0; }
+.topbar.brand .topbar-side, .topbar.brand .map-btn { flex: none; }
+.topbar.brand .topbar-side.right { margin-left: auto; }
