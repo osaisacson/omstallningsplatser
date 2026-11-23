@@ -1,8 +1,8 @@
 // Flödet, enskilt inlägg och skapa/redigera inlägg.
 import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
-import { useStore, useAsync, go, attempt, refreshBadges, onRefresh } from '../store.js';
-import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, AddressPicker } from '../ui.js';
+import { useStore, useAsync, go, attempt, refreshBadges, refreshMe, onRefresh } from '../store.js';
+import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker } from '../ui.js';
 import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
 
 import { InstallHint } from '../install.js';
@@ -284,6 +284,10 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   const [groupId, setGroupId] = useState(initialGroup && s.memberOf.has(initialGroup) ? initialGroup : myGroups[0]?.id || null);
   const [personal, setPersonal] = useState(false);
   const [asGroup, setAsGroup] = useState(false);   // admins kan publicera som gruppen
+  // Vem ser inlägget: alla (tom lista) eller bara medlemmar i valda grupper.
+  const [visibleTo, setVisibleTo] = useState([]);
+  const [limit, setLimit] = useState(false);
+  const [joining, setJoining] = useState(false);
   // Plats för inlägg utan grupp (förifylld med ens egen plats).
   const [where, setWhere] = useState(() => (s.me.home ? { ...emptyHome(), ...s.me.home, district: null } : emptyHome()));
   const placeGroups = useAsync(() => api.listGroups(), []);
@@ -305,7 +309,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       if (p.author_id !== s.me.id) return go('/post/' + editId);
       setType(p.is_event ? 'evenemang' : postType(p));
       setSlides(p.slides.map((x) => ({ key: x.id, id: x.id, image_url: x.image_url, preview: x.image_url, text: x.text || '' })));
-      setCaption(p.caption || ''); setGroupId(p.group_id); setPersonal(!p.group_id); setAsGroup(!!p.as_group);
+      setCaption(p.caption || ''); setGroupId(p.group_id); setPersonal(!p.group_id); setAsGroup(!!p.as_group); setVisibleTo(p.visible_to || []); setLimit(!!p.visible_to?.length);
       if (!p.group_id && p.country) setWhere({ ...emptyHome(), country: p.country, region: p.region || '', city: p.city || '', postcode: p.postcode || null });
       setTags(p.categories || []);
       setFunctions(p.space_functions || []); setCost(p.space_cost || 'gratis'); setPrice(p.space_price || '');
@@ -338,11 +342,13 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   async function submit(e) {
     e.preventDefault(); setErr('');
     if (type === 'finansiering' && !hadFinance && finEnd && finEnd < plusDays(0)) return setErr('Slutdatumet har redan passerat.');
+    if (!isPersonal && groupId && !s.memberOf.has(groupId)) return setErr('Gå med i gruppen först – eller välj en annan grupp.');
+    if (limit && !visibleTo.length) return setErr('Välj minst en grupp som ska se inlägget, eller välj Alla.');
     if (isPersonal && checkHome(where)) return setErr(checkHome(where).replace('du håller till i', 'inlägget gäller'));
     setBusy(true);
     try {
       const payload = {
-        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), caption, tags,
+        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], caption, tags,
         slides: slides.map(({ id, file, image_url, text }) => ({ id, file, image_url, text })),
         finance: type === 'finansiering'
           ? { total: Number(String(finTotal).replace(/\s/g, '')), mode: finMode, expiresAt: finEnd ? new Date(finEnd + 'T23:59:59').toISOString() : null }
@@ -409,7 +415,14 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
             <p>Inlägg ska helst höra till en grupp. Gå med i en grupp eller skapa en ny.</p>
             <div class="btnrow"><a class="btn small" href="#/sok?flik=grupper">Hitta grupper</a><a class="btn small primary" href="#/ny-grupp?next=/ny">Skapa grupp</a></div>
           </div>`
-        : html`${!isPersonal && html`<${GroupPicker} groups=${myGroups} value=${groupId} onChange=${(id) => { setGroupId(id); setPersonal(false); }} />`}
+        : html`${!isPersonal && html`<${GroupPicker} groups=${myGroups} others=${placeGroups.data || []} value=${groupId} onChange=${(id) => { setGroupId(id); setPersonal(false); }} />`}
+          ${!isPersonal && groupId && !s.memberOf.has(groupId) && (() => { const g = (placeGroups.data || []).find((x) => x.id === groupId); return html`<div class="nudge join-first">
+            <span>Du är inte med i <b>${g?.name || 'gruppen'}</b>. Gå med för att kunna posta där.</span>
+            <button type="button" class="btn small primary" disabled=${joining} onClick=${async () => {
+              setJoining(true);
+              if (await attempt(() => api.joinGroup(groupId), `Du är med i ${g?.name || 'gruppen'}`)) await refreshMe();
+              setJoining(false);
+            }}>Gå med</button></div>`; })()}
           ${isPersonal
             ? html`<p class="hint">Personligt inlägg – det hör inte till någon grupp. <button type="button" class="link" onClick=${() => { setPersonal(false); setGroupId(groupId || myGroups[0].id); }}>Välj en grupp i stället</button></p>`
             : html`<button type="button" class="link subtle" onClick=${() => setPersonal(true)}>Posta utan grupp</button>`}
@@ -419,6 +432,14 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       ${isPersonal && html`<${HomePlaceFields} value=${where} onChange=${setWhere} groups=${placeGroups.data} legend="Var gäller inlägget?" chooseLevel=${false} />
         <small class="muted place-why">Inlägg utan grupp syns på den plats du anger här.</small>`}
       </section>
+
+      <fieldset class="field visibility">
+        <legend class="label">Vem ser inlägget?</legend>
+        <label class="radio"><input type="radio" name="vis" checked=${!limit} onChange=${() => setLimit(false)} /><span><strong>Alla</strong></span></label>
+        <label class="radio"><input type="radio" name="vis" checked=${limit} onChange=${() => { setLimit(true); if (!visibleTo.length && !isPersonal && groupId) setVisibleTo([groupId]); }} />
+          <span><strong>Bara vissa grupper</strong><small>Bara medlemmar i grupperna du väljer ser inlägget. Det går att ändra senare.</small></span></label>
+        ${limit && html`<${GroupsPicker} groups=${myGroups} others=${placeGroups.data || []} value=${visibleTo} onChange=${setVisibleTo} />`}
+      </fieldset>
 
       <section class="field">
         <div class="label">Bilder</div>

@@ -43,6 +43,12 @@ function needMe() { if (!db.session) throw new Error('Du är inte inloggad.'); r
 const membership = (gid, uid) => db.members.find((m) => m.group_id === gid && m.user_id === uid);
 function needMember(gid) { const me = needMe(); if (!membership(gid, me)) throw new Error('Bara gruppens medlemmar kan göra det.'); return me; }
 // En grupp utan admin sköts av Redaktionen.
+// Samma regel som i databasen: alla ser inlägget, om det inte bara är för vissa grupper.
+function canSee(p) {
+  const me = db.session;
+  if (!p.visible_to?.length || p.author_id === me || db.editors.includes(me)) return true;
+  return db.members.some((m) => m.user_id === me && p.visible_to.includes(m.group_id));
+}
 function needAdmin(gid) {
   const me = needMe();
   const noAdmin = !db.members.some((m) => m.group_id === gid && m.role === 'admin');
@@ -328,7 +334,7 @@ export const api = {
   async listCategories() { return sortCategories(db.categories.map((c) => c.name)); },
   async listPosts({ kind = null, tag = null, groupId = null, authorId = null, q = '', feed = false, before = null, limit = 200 } = {}) {
     q = q.trim().toLowerCase();
-    let ps = db.posts.filter((p) =>
+    let ps = db.posts.filter((p) => canSee(p) &&
       (!kind || (p.kind || 'vanlig') === kind) && (!tag || p.categories.includes(tag)) &&
       (!groupId || p.group_id === groupId) && (!authorId || p.author_id === authorId) &&
       (!q || p.caption.toLowerCase().includes(q) || p.slides.some((s) => s.text.toLowerCase().includes(q))));
@@ -337,7 +343,7 @@ export const api = {
   },
   async getPost(id) {
     const p = db.posts.find((x) => x.id === id);
-    if (!p) throw new Error('Inlägget finns inte (längre).');
+    if (!p || !canSee(p)) throw new Error('Inlägget finns inte (längre).');
     const me = db.session;
     const post = shapePost(p);
     post.comments = db.comments.filter((c) => c.post_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -351,7 +357,7 @@ export const api = {
     if (v.groupId && !membership(v.groupId, me)) throw new Error('Du kan bara posta i grupper du är med i.');
     const t = now();
     const post = {
-      id: uuid(), author_id: me, group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
+      id: uuid(), author_id: me, group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', visible_to: v.visibleTo?.length ? v.visibleTo : null, caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event),
       fin_total: v.finance?.total ?? null, fin_mode: v.finance?.mode ?? null, fin_expires_at: v.finance?.expiresAt ?? null, fin_closed: false,
       created_at: t, updated_at: t, last_activity_at: t, slides: await buildSlides(v.slides),
@@ -367,7 +373,7 @@ export const api = {
     const v = normalizePostInput(input);
     if (p.fin_total != null && !v.finance) throw new Error('Ett finansieringsinlägg kan inte byta typ. Stäng det i stället via ··· på inlägget.');
     if (v.groupId && v.groupId !== p.group_id && !membership(v.groupId, me)) throw new Error('Du kan bara posta i grupper du är med i.');
-    Object.assign(p, { group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: now(),
+    Object.assign(p, { group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', visible_to: v.visibleTo?.length ? v.visibleTo : null, caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: now(),
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event) });
     if (v.finance) {
       if (p.fin_total == null) Object.assign(p, { fin_total: v.finance.total, fin_mode: v.finance.mode });

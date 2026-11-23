@@ -932,3 +932,13 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 /* ··· på profil- och gruppsidor: uppe till höger under rubrikraden */
 .profile-head { position: relative; }
 .profile-more { position: absolute; top: 2px; right: 6px; }
+
+/* Välj grupp / grupper */
+.ta-head { padding: 6px 12px 4px; font-size: 11.5px; color: var(--muted); }
+.ta-item small.muted { margin-left: auto; font-size: 11.5px; }
+.groups-picker .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.groups-picker .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+.groups-picker .chip button { width: 20px; height: 20px; border-radius: 50%; color: inherit; font-size: 15px; line-height: 1; }
+.visibility .radio { margin-bottom: 6px; }
+.join-first { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.limited { display: block; font-size: 11.5px; color: var(--muted); }

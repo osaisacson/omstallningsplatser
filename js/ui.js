@@ -153,21 +153,56 @@ export function AddressPicker({ value, onPick, placeholder = 'Börja skriva en a
 }
 
 // Välj grupp genom att börja skriva namnet. Vald grupp visas som en rad med "Byt".
-export function GroupPicker({ groups, value, onChange, placeholder = 'Skriv gruppens namn…' }) {
+// Välj grupp: ens egna grupper visas direkt; skriver man söks även andra grupper (others), märkta "inte med".
+export function GroupPicker({ groups, others = [], value, onChange, placeholder = 'Skriv gruppens namn…' }) {
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState(!value);
-  const sel = groups.find((g) => g.id === value);
+  const [focus, setFocus] = useState(false);
+  const mine = new Set(groups.map((g) => g.id));
+  const all = [...groups, ...others.filter((g) => !mine.has(g.id) && !g.locked)];
+  const sel = all.find((g) => g.id === value);
   if (sel && !editing) return html`<div class="picked">
     <${Avatar} src=${sel.avatar_url} name=${sel.name} size=${28} /><strong>${sel.name}</strong>
     <button type="button" class="link" onClick=${() => setEditing(true)}>Byt</button></div>`;
-  const hits = q.trim() ? groups.filter((g) => g.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6) : [];
-  const choose = (g) => { onChange(g.id); setQ(''); setEditing(false); };
+  const n = q.trim().toLowerCase();
+  const hits = n ? all.filter((g) => g.name.toLowerCase().includes(n)).sort((a, b) => mine.has(b.id) - mine.has(a.id)).slice(0, 8)
+    : focus || !sel ? groups.slice(0, 12) : [];
+  const choose = (g) => { onChange(g.id); setQ(''); setEditing(false); setFocus(false); };
   return html`<div class="typeahead">
     <input value=${q} onInput=${(e) => setQ(e.target.value)} placeholder=${placeholder} aria-label="Välj grupp" autofocus=${!!sel}
+      onFocus=${() => setFocus(true)} onBlur=${() => setTimeout(() => setFocus(false), 180)}
       onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); if (hits[0]) choose(hits[0]); } if (e.key === 'Escape' && sel) setEditing(false); }} />
-    ${hits.length > 0 && html`<div class="ta-list" role="listbox">${hits.map((g) => html`<button type="button" role="option" class="ta-item" key=${g.id} onClick=${() => choose(g)}>
-      <${Avatar} src=${g.avatar_url} name=${g.name} size=${24} /><span>${g.name}</span></button>`)}</div>`}
-    ${q.trim() && !hits.length && html`<small class="muted">Ingen av dina grupper heter så.</small>`}
+    ${hits.length > 0 && html`<div class="ta-list" role="listbox">
+      ${!n && html`<div class="ta-head">Dina grupper – skriv för att hitta andra</div>`}
+      ${hits.map((g) => html`<button type="button" role="option" class="ta-item" key=${g.id} onPointerDown=${(e) => e.preventDefault()} onClick=${() => choose(g)}>
+      <${Avatar} src=${g.avatar_url} name=${g.name} size=${24} /><span>${g.name}</span>${!mine.has(g.id) && html`<small class="muted">inte med</small>`}</button>`)}</div>`}
+    ${n && !hits.length && html`<small class="muted">Ingen grupp heter så.</small>`}
+  </div>`;
+}
+
+// Välj flera grupper (t.ex. vilka som ser ett inlägg): valda visas som etiketter, egna grupper föreslås, andra går att söka.
+export function GroupsPicker({ groups, others = [], value, onChange }) {
+  const [q, setQ] = useState('');
+  const [focus, setFocus] = useState(false);
+  const mine = new Set(groups.map((g) => g.id));
+  const all = [...groups, ...others.filter((g) => !mine.has(g.id))];
+  const byId = new Map(all.map((g) => [g.id, g]));
+  const n = q.trim().toLowerCase();
+  const pool = all.filter((g) => !value.includes(g.id));
+  const hits = n ? pool.filter((g) => g.name.toLowerCase().includes(n)).sort((a, b) => mine.has(b.id) - mine.has(a.id)).slice(0, 8)
+    : focus ? pool.filter((g) => mine.has(g.id)).slice(0, 12) : [];
+  const add = (g) => { onChange([...value, g.id]); setQ(''); };
+  return html`<div class="groups-picker">
+    ${value.length > 0 && html`<div class="chips">${value.map((id) => html`<span class="chip" key=${id}>${byId.get(id)?.name || 'Grupp'}
+      <button type="button" aria-label="Ta bort" onClick=${() => onChange(value.filter((x) => x !== id))}>×</button></span>`)}</div>`}
+    <div class="typeahead">
+      <input value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="Lägg till en grupp…" aria-label="Lägg till grupp som ser inlägget"
+        onFocus=${() => setFocus(true)} onBlur=${() => setTimeout(() => setFocus(false), 180)}
+        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); if (hits[0]) add(hits[0]); } }} />
+      ${hits.length > 0 && html`<div class="ta-list" role="listbox">${hits.map((g) => html`<button type="button" role="option" class="ta-item" key=${g.id}
+        onPointerDown=${(e) => e.preventDefault()} onClick=${() => add(g)}>
+        <${Avatar} src=${g.avatar_url} name=${g.name} size=${24} /><span>${g.name}</span>${!mine.has(g.id) && html`<small class="muted">inte med</small>`}</button>`)}</div>`}
+    </div>
   </div>`;
 }
 
@@ -435,17 +470,19 @@ export function ThemePicker({ onPick, onClose, title = 'Spara i Minne', hint = '
 // Vem som skrivit inlägget. Personen är avsändaren – gruppen visas som en liten bild på personens bild och
 // "i Gruppnamn" under namnet: inlägget hör till gruppen, men personen talar inte för den.
 // Har en admin valt att publicera som gruppen är det tvärtom: gruppen är avsändaren och "via Namn" står under.
+// Inlägg som bara vissa grupper ser får en liten markering.
+const limited = (p) => p.visible_to?.length > 0 && html`<span class="limited" title="Syns bara för medlemmar i de grupper som valts">Bara för ${p.visible_to.length === 1 ? 'en grupp' : p.visible_to.length + ' grupper'}</span>`;
 export function PostHead({ post: p, children }) {
   const g = p.group, a = p.author;
   if (p.as_group && g) return html`<div class="post-head">
     <a href=${'#/grupp/' + g.id}><${Avatar} src=${g.avatar_url} name=${g.name} size=${36} /></a>
-    <div class="who"><a class="strong" href=${'#/grupp/' + g.id}>${g.name}</a><a class="by" href=${'#/profil/' + a.id}>via ${a.name}</a></div>
+    <div class="who"><a class="strong" href=${'#/grupp/' + g.id}>${g.name}</a><a class="by" href=${'#/profil/' + a.id}>via ${a.name}</a>${limited(p)}</div>
     ${children}</div>`;
   return html`<div class="post-head">
     <a class="head-avatar" href=${'#/profil/' + a.id}><${Avatar} src=${a.avatar_url} name=${a.name} size=${36} />
       ${g && html`<span class="head-group" title=${g.name}><${Avatar} src=${g.avatar_url} name=${g.name} size=${18} /></span>`}</a>
     <div class="who"><a class="strong" href=${'#/profil/' + a.id}>${a.name}</a>
-      ${g && html`<a class="by" href=${'#/grupp/' + g.id}>i <b>${g.name}</b></a>`}</div>
+      ${g && html`<a class="by" href=${'#/grupp/' + g.id}>i <b>${g.name}</b></a>`}${limited(p)}</div>
     ${children}</div>`;
 }
 
