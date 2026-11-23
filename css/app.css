@@ -385,7 +385,7 @@ input, textarea, select { font-size: 16px !important; }
 
 /* ---- Platsväljare, flikar med plus, lokaler, ämnen ---- */
 .place-btn { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 4px 0; line-height: 1.15; }
-.place-name { font-size: 19px; font-weight: 700; color: var(--accent); display: inline-flex; align-items: center; gap: 4px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.place-name { font-size: 16px; font-weight: 700; color: var(--accent); display: inline-flex; align-items: center; gap: 4px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .place-name .chev { font-size: 13px; color: var(--muted); }
 .place-hint { font-size: 11px; color: var(--muted); }
 .topbar.brand { height: 56px; }
@@ -881,3 +881,17 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .modal .btnrow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .admin-nudge { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin: 10px 16px; padding: 10px 12px; }
 .admin-req .btnrow { display: flex; gap: 8px; margin-top: 6px; }
+
+/* Nytt sen sist, överst i flödet */
+.since { margin: 10px 12px 4px; display: flex; flex-direction: column; gap: 8px; }
+.since-new { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 14px; }
+.since-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+.since-app { position: relative; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+.since-head { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 40px 10px 12px; text-align: left; }
+.since-head .chev { color: var(--muted); font-size: 14px; }
+.since-x { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; color: var(--muted); font-size: 20px; line-height: 1; border-radius: 8px; }
+.since-app ul { margin: 0; padding: 0 14px 12px 30px; line-height: 1.45; font-size: 13.5px; }
+.since-app li { margin: 3px 0; }
+.admin-nudge small { display: block; margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+.admin-nudge a { color: inherit; text-decoration: underline; }
+.dd-rest { margin-top: 14px; padding-top: 16px; border-top: 1px solid var(--line); }

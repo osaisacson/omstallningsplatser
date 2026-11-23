@@ -127,11 +127,6 @@ export function Inbox() {
   const c = useAsync(() => api.listConversations(), []);
   return html`<div class="page">
     <${Header} title="Meddelanden" back right=${html`<a class="iconbtn" href="#/meddelanden/ny" aria-label="Nytt meddelande"><${Icon} name="edit" /></a>`} />
-    <a class=${'row convo notif-row' + (s.badges.notifications ? ' unread' : '')} href="#/notiser">
-      <span class="avatar sys notif-ico"><${Icon} name="bell" size=${22} /></span>
-      <span class="row-main"><strong>Notiser</strong><small class="snippet">${s.badges.notifications ? `${s.badges.notifications} olästa` : 'Kommentarer, ansökningar, beslut och annat som rör dig'}</small></span>
-      ${s.badges.notifications > 0 && html`<span class="convo-side"><span class="unread-dot" aria-label=${`${s.badges.notifications} olästa`}></span></span>`}
-    </a>
     ${c.loading && !c.data ? html`<${Loading} />` : c.error ? html`<${ErrorBox} error=${c.error} />`
       : c.data.length === 0 ? html`<div class="empty">
           <p>Inga meddelanden än.</p><a class="btn primary" href="#/meddelanden/ny">Skriv ett meddelande</a></div>`

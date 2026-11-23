@@ -12,6 +12,9 @@ import { Help, Feedback, FeedbackView } from './views/help.js';
 import { InstallSheet } from './install.js';
 import { RolePrompts } from './views/roles.js';
 import { Memory } from './views/memory.js';
+import { startVisits } from './visits.js';
+
+startVisits();
 
 function parse() {
   let h = location.hash.slice(1);
@@ -56,7 +59,8 @@ function BottomNav({ r }) {
     ${item('#/minne', 'Minne', a === 'minne', html`<${Icon} name="memory" size=${26} />`)}
     ${item('#/sok', 'Sök', a === 'sok', html`<${Icon} name="search" size=${26} />`, 0, 'desk')}
     ${item('#/karta', 'Karta', a === 'karta', html`<${Icon} name="map" size=${26} />`, 0, 'desk')}
-    ${item('#/meddelanden', 'Meddelanden', a === 'meddelanden', html`<${Icon} name="chat" size=${26} />`, (s.badges.messages + s.badges.notifications), 'desk')}
+    ${item('#/meddelanden', 'Meddelanden', a === 'meddelanden', html`<${Icon} name="chat" size=${26} />`, s.badges.messages, 'desk')}
+    ${item('#/notiser', 'Notiser', a === 'notiser', html`<${Icon} name="bell" size=${26} />`, s.badges.notifications, 'desk')}
     ${(s.badges.todos > 0 || s.me.is_editor) && item('#/att-gora', 'Checklista', a === 'att-gora', html`<${Icon} name="check" size=${26} />`, s.badges.todos, 'desk')}
     ${item('#/ny', 'Nytt inlägg', a === 'ny', html`<span class="nav-new-btn"><${Icon} name="add" size=${26} /></span>`, 0, 'nav-new')}
     ${item('#/hjalp', 'Hjälp och feedback', a === 'hjalp' || a === 'feedback', html`<${Icon} name="help" size=${26} />`)}

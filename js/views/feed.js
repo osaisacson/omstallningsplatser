@@ -6,6 +6,7 @@ import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, She
 import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
 
 import { InstallHint } from '../install.js';
+import { CHANGES } from '../changelog.js';
 
 const PLUS = html`<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 
@@ -72,6 +73,35 @@ function FilterCombo({ value, onChange, options, placeholder }) {
   </label>`;
 }
 
+// Överst i flödet: hur många nya inlägg det finns på platsen sen man var här sist (bara om det finns några),
+// och vad som ändrats i appen sen dess – fällbart till en kort punktlista.
+function SinceLast({ here, posts, where }) {
+  const s = useStore();
+  const [open, setOpen] = useState(false);
+  const [closed, setClosed] = useState(null);   // stängd för just det här besöket
+  const since = s.lastVisit;
+  if (!since) return null;
+  const isNew = (p) => new Date(p.created_at) > since && p.author_id !== s.me.id;
+  const fresh = here.filter(isNew).length;
+  // Är alla hämtade inlägg nya kan det finnas fler än så.
+  const more = !posts.done && (posts.data || []).length > 0 && (posts.data || []).every(isNew);
+  const changes = closed === since ? [] : CHANGES.filter((c) => c.at > since);
+  if (!fresh && !changes.length) return null;
+  const MAX = 8;
+  return html`<div class="since">
+    ${fresh > 0 && html`<div class="since-new"><span class="since-dot" aria-hidden="true"></span>
+      <span><b>${fresh}${more ? '+' : ''} ${fresh === 1 ? 'nytt inlägg' : 'nya inlägg'}</b> i ${where} sen sist</span></div>`}
+    ${changes.length > 0 && html`<div class="since-app">
+      <button class="since-head" aria-expanded=${open} onClick=${() => setOpen((x) => !x)}>
+        <span><b>${changes.length} ${changes.length === 1 ? 'uppdatering' : 'uppdateringar'}</b> av appen sen sist</span>
+        <span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button>
+      <button class="since-x" aria-label="Dölj" onClick=${() => setClosed(since)}>×</button>
+      ${open && html`<ul>${changes.slice(0, MAX).map((c, i) => html`<li key=${i}>${c.text}</li>`)}
+        ${changes.length > MAX && html`<li class="muted">… och ${changes.length - MAX} till</li>`}</ul>`}
+    </div>`}
+  </div>`;
+}
+
 const TABS = [['flode', 'Flöde'], ['finansiering', 'Finansiering'], ['lokal', 'Lokaler'], ['evenemang', 'Events']];
 
 export function Home({ tab: startTab }) {
@@ -105,7 +135,8 @@ export function Home({ tab: startTab }) {
       <div class="topbar-side right">
         <a class="iconbtn" href="#/sok" aria-label="Sök" title="Sök"><${Icon} name="search" /></a>
         ${(s.badges.todos > 0 || s.me.is_editor) && html`<a class="iconbtn" href="#/att-gora" aria-label="Checklista"><${Icon} name="check" /><${Count} n=${s.badges.todos} /></a>`}
-        <a class="iconbtn" href="#/meddelanden" aria-label="Meddelanden"><${Icon} name="chat" /><${Count} n=${(s.badges.messages + s.badges.notifications)} /></a>
+        <a class="iconbtn" href="#/notiser" aria-label="Notiser" title="Notiser"><${Icon} name="bell" /><${Count} n=${s.badges.notifications} /></a>
+        <a class="iconbtn" href="#/meddelanden" aria-label="Meddelanden"><${Icon} name="chat" /><${Count} n=${s.badges.messages} /></a>
       </div>
     </header>
     ${api.mode === 'demo' && html`<div class="demo-banner">Demoläge – allt sparas bara i den här webbläsaren.
@@ -136,6 +167,7 @@ export function Home({ tab: startTab }) {
       <${FilterCombo} value=${cost} onChange=${setCost} options=${Object.values(SPACE_COSTS)} placeholder="Kostnad" />
     </div>`}
 
+    ${tab === 'flode' && posts.data && html`<${SinceLast} here=${here} posts=${posts} where=${where} />`}
     ${tab === 'evenemang' ? html`<${EventsList} place=${place} empty=${html`<p class="empty">Inga kommande evenemang i ${where}.
           ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> högst upp för att zooma ut till ${placeLabel(zoomOut(place))}.</span>`}</p>`} />`
       : posts.loading && !posts.data ? html`<${FeedSkeleton} />` : posts.error ? html`<${ErrorBox} error=${posts.error} />`

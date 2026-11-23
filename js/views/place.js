@@ -4,7 +4,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, setPlace, onRefresh } from '../store.js';
 import { Sheet } from '../ui.js';
-import { learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
+import { getOnlyCountry, learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
 
 const lc = (x) => (x || '').toLowerCase();
 const LEVEL_TITLE = { country: 'land', region: 'region', city: 'stad', district: 'stadsdel' };
@@ -18,7 +18,9 @@ export function placeOptions(groups, extras = []) {
     if (field === 'home') x.home = true; else x[field]++;
     m.set(key, x);
   };
-  const addAll = (g, field) => {
+  const addAll = (g0, field) => {
+    // Saknar en plats land men har region eller stad hör den till landet (finns bara ett).
+    const g = !g0.country && (g0.region || g0.city) && getOnlyCountry() ? { ...g0, country: getOnlyCountry() } : g0;
     const c = lc(g.country);
     if (g.country) add('country', c, { country: g.country }, field);
     if (g.region) add('region', `${c}|${lc(g.region)}`, { region: g.region, country: g.country }, field);
@@ -192,10 +194,10 @@ function PlaceDropdown({ level, place, groups, extras, countries = [], onClose }
           ${!hits.length && html`<p class="dd-empty">Inget sådant finns i appen än.</p>`}
 `
         : html`
-          ${near.length > 0 && html`<div class="dd-label">I ${parentKey === 'region' ? regionName(place.region) : place[parentKey]}</div>${near.map((o) => item(o))}`}
-          ${flat ? html`${rest.length > 0 && near.length > 0 && html`<div class="dd-label">${REST[level]}</div>`}
+          ${near.map((o) => item(o))}
+          ${flat ? html`${rest.length > 0 && near.length > 0 && html`<div class="dd-label dd-rest">${REST[level]}</div>`}
               ${rest.sort(sortName).map((o) => item(o, parentKey && groupOf(o)))}`
-            : html`${groupNames.length > 0 && html`<div class="dd-label">Andra städer</div>`}
+            : html`${groupNames.length > 0 && html`<div class=${'dd-label' + (near.length ? ' dd-rest' : '')}>Andra städer</div>`}
               ${groupNames.map((g) => html`<button class="dd-group" aria-expanded=${!!openGroups[g]} onClick=${() => setOpenGroups((x) => ({ ...x, [g]: !x[g] }))}>
                 <span>${g} <small>${count(grouped[g].length)}</small></span><span class="dd-chev">${openGroups[g] ? '▾' : '▸'}</span></button>
               ${openGroups[g] && grouped[g].sort(sortName).map((o) => item(o))}`)}`}`}

@@ -181,7 +181,8 @@ export function Profile({ id }) {
     <${Header} title=${user.name} back=${!isMe} right=${isMe && html`<span class="profile-tools">
       <a class="iconbtn" href="#/sok" aria-label="Sök" title="Sök"><${Icon} name="search" /></a>
       ${(s.badges.todos > 0 || s.me.is_editor) && html`<a class="iconbtn" href="#/att-gora" aria-label="Checklista" title="Checklista"><${Icon} name="check" /><${Count} n=${s.badges.todos} /></a>`}
-      <a class="iconbtn" href="#/meddelanden" aria-label="Meddelanden" title="Meddelanden"><${Icon} name="chat" /><${Count} n=${(s.badges.messages + s.badges.notifications)} /></a></span>`} />
+      <a class="iconbtn" href="#/notiser" aria-label="Notiser" title="Notiser"><${Icon} name="bell" /><${Count} n=${s.badges.notifications} /></a>
+      <a class="iconbtn" href="#/meddelanden" aria-label="Meddelanden" title="Meddelanden"><${Icon} name="chat" /><${Count} n=${s.badges.messages} /></a></span>`} />
     <div class="profile-head">
       <${Avatar} src=${user.avatar_url} name=${user.name} size=${84} />
       <div class="stats">

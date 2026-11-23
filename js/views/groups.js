@@ -47,8 +47,8 @@ export function GroupView({ id }) {
   const list = posts.data || [];
   const cover = (h) => list.find((p) => p.id === h.post_ids[0] && p.slides[0])?.slides[0].image_url;
   const reload = () => { g.reload(); posts.reload(); };
-  // Hämtad från t.ex. byggemenskaper.se: bannern visas tills någon annan än den som hämtade gruppen blivit admin.
-  const imported = grp.imported_from && !grp.members.some((m) => m.role === 'admin' && m.user.id !== grp.created_by);
+  // Grupp utan admin (t.ex. hämtad från byggemenskaper.se): en ruta överst om var den kommer ifrån och hur man blir admin.
+  const pending = (mine.data || []).some((r) => r.group_id === id && r.status === 'pending');
 
   async function join() {
     if (await attempt(() => api.joinGroup(id), `Välkommen till ${grp.name}!`)) {
@@ -59,9 +59,12 @@ export function GroupView({ id }) {
 
   return html`<div class="page">
     <${Header} title=${grp.name} back right=${admin && html`<a class="iconbtn" href=${`#/grupp/${id}/installningar`} aria-label="Gruppinställningar"><${Icon} name="gear" /></a>`} />
-    ${imported && html`<div class="imported-banner">
-      Hämtad från <a href=${'https://' + grp.imported_from} target="_blank" rel="noopener noreferrer">${grp.imported_from}</a>, inte administrerad av gruppen (än).
-      <small>Är det er grupp? Gå med och be om att bli admin.</small>
+    ${!hasAdmin && !grp.locked && html`<div class="nudge admin-nudge">
+      <span>${grp.imported_from
+          ? html`Hämtad från <a href=${'https://' + grp.imported_from} target="_blank" rel="noopener noreferrer">${grp.imported_from}</a> och har ingen admin än – Redaktionen tar hand om den så länge.`
+          : html`<b>Gruppen har ingen admin</b> just nu – Redaktionen tar hand om den så länge.`}
+        <small>${pending ? 'Din förfrågan om att bli admin väntar på Redaktionen.' : grp.imported_from ? 'Är det er grupp? Bli admin och ta över den.' : 'Är du med i gruppen? Bli admin och ta hand om den.'}</small></span>
+      ${!pending && html`<button class="btn small primary" onClick=${() => (member ? setAsking(true) : join())}>Bli admin</button>`}
     </div>`}
     <div class="profile-head">
       <${Avatar} src=${grp.avatar_url} name=${grp.name} size=${84} />
@@ -77,12 +80,6 @@ export function GroupView({ id }) {
       <a class="btn primary" href=${'#/ny?grupp=' + id}>Nytt inlägg</a>
     </div>`}
 
-    ${member && !hasAdmin && !grp.locked && html`<div class="nudge admin-nudge">
-      ${(mine.data || []).some((r) => r.group_id === id && r.status === 'pending')
-        ? html`<span>Din förfrågan om att bli admin väntar på Redaktionen.</span>`
-        : html`<span><b>Gruppen har ingen admin</b> – Redaktionen tar hand om den så länge. Vill du bli admin?</span>
-          <button class="btn small primary" onClick=${() => setAsking(true)}>Bli admin</button>`}
-    </div>`}
     ${asking && html`<${AdminRequestForm} group=${grp} onClose=${() => setAsking(false)} onDone=${() => { setAsking(false); mine.reload(); }} />`}
     <div class="members-head">
       ${!member && !grp.locked && html`<button class="btn primary small" onClick=${join}>Gå med i gruppen</button>`}
