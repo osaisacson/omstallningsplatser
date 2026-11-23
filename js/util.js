@@ -16,7 +16,19 @@ export const fmtPostcode = (p) => { const d = String(p || '').replace(/\D/g, '')
 // Har platsen ett värde på den här nivån? (Hela världen har alltid det.)
 export const hasLevel = (place, level) => level === 'world' || !!(place && (place[LEVEL_KEY[level]] || (level === 'district' && place.district)));
 // "Västra Götalands län" → "Västra Götaland": ordet län behövs inte och tar plats.
-export const regionName = (r) => String(r || '').replace(/s? län$/i, '').replace(/ län$/i, '');
+// Regionerna visas med sina egna namn (Region Uppsala, Västra Götalandsregionen), så att de inte förväxlas med staden.
+// I databasen sparas länets namn (Uppsala län) – det är samma område.
+const REGION_NAMES = {
+  'blekinge län': 'Region Blekinge', 'dalarnas län': 'Region Dalarna', 'gotlands län': 'Region Gotland', 'gävleborgs län': 'Region Gävleborg',
+  'hallands län': 'Region Halland', 'jämtlands län': 'Region Jämtland Härjedalen', 'jönköpings län': 'Region Jönköpings län', 'kalmar län': 'Region Kalmar län',
+  'kronobergs län': 'Region Kronoberg', 'norrbottens län': 'Region Norrbotten', 'skåne län': 'Region Skåne', 'stockholms län': 'Region Stockholm',
+  'södermanlands län': 'Region Sörmland', 'uppsala län': 'Region Uppsala', 'värmlands län': 'Region Värmland', 'västerbottens län': 'Region Västerbotten',
+  'västernorrlands län': 'Region Västernorrland', 'västmanlands län': 'Region Västmanland', 'västra götalands län': 'Västra Götalandsregionen',
+  'örebro län': 'Region Örebro län', 'östergötlands län': 'Region Östergötland',
+};
+export const regionName = (r) => REGION_NAMES[String(r || '').trim().toLowerCase()] || String(r || '');
+// Sorteras på själva namnet, inte på ordet "Region".
+export const regionSortKey = (name) => String(name || '').replace(/^Region /, '');
 export function placeLabel(place) {
   if (!place || place.level === 'world') return 'Hela världen';
   if (place.level === 'district') return place.district || (place.postcode ? fmtPostcode(place.postcode) : 'Stadsdel');

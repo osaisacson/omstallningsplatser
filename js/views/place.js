@@ -4,7 +4,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, setPlace, onRefresh } from '../store.js';
 import { Sheet } from '../ui.js';
-import { getOnlyCountry, learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
+import { getOnlyCountry, learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, regionSortKey, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
 
 const lc = (x) => (x || '').toLowerCase();
 const LEVEL_TITLE = { country: 'land', region: 'region', city: 'stad', district: 'stadsdel' };
@@ -161,7 +161,7 @@ function PlaceDropdown({ level, place, groups, extras, countries = [], onClose }
   const names = useDistrictNames(level === 'district' ? opts.filter((o) => lc(o.city) === lc(place.city)).concat(opts).slice(0, 30) : []);
   const label = (o) => (level === 'district' ? names[pcKey(o.postcode)] || o.district || fmtPostcode(o.postcode) : level === 'region' ? regionName(o.region) : o[level]);
   const groupOf = (o) => (parentKey === 'region' ? regionName(o.region) : o[parentKey]) || 'Övrigt';
-  const sortName = (a, b) => label(a).localeCompare(label(b), 'sv');
+  const sortName = (a, b) => regionSortKey(label(a)).localeCompare(regionSortKey(label(b)), 'sv');
   const near = parentKey && place[parentKey] ? opts.filter((o) => lc(o[parentKey]) === lc(place[parentKey])
     && (level !== 'city' || lc(o.country) === lc(place.country))).sort(sortName) : [];
   const nearSet = new Set(near);

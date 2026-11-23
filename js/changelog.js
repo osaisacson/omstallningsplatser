@@ -1,6 +1,7 @@
 // Vad som är nytt i appen. Visas överst i flödet som "N uppdateringar sen sist" för den som varit här förut.
 // Lägg nya rader överst: när (svensk tid) och en kort mening som en användare förstår.
 export const CHANGES = [
+  ['2026-11-23T15:00', 'Regionerna heter som de gör på riktigt – Region Uppsala, Västra Götalandsregionen – så att de inte blandas ihop med städerna.'],
   ['2026-11-23T14:00', 'Platsens namn syns alltid helt – långa namn radbryts och krymper.'],
   ['2026-11-23T14:00', 'Att dra uppåt i en lista uppdaterar inte längre hela appen.'],
   ['2026-11-23T12:00', 'Överst i flödet syns hur mycket som är nytt sen du var här sist.'],
