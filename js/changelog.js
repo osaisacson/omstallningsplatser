@@ -1,15 +1,16 @@
-// Vad som är nytt i appen. Visas överst i flödet som "N uppdateringar sen sist" för den som varit här förut.
-// Lägg nya rader överst: när (svensk tid) och en kort mening som en användare förstår.
+// Vad som är nytt i appen. Visas överst i flödet som "N uppdateringar sen sist": bara det som
+// tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
+// publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
-  ['2026-11-23T17:00', 'Gruppens medlemmar syns direkt som en rad med bilder, admins först.'],
-  ['2026-11-23T17:00', 'Anmäl och liknande finns under ··· uppe till höger på grupper och profiler.'],
-  ['2026-11-23T16:00', 'Listorna som går i sidled (t.ex. grupperna överst) går att dra direkt, utan att man behöver ta nytt tag.'],
-  ['2026-11-23T15:00', 'Regionerna heter som de gör på riktigt – Region Uppsala, Västra Götalandsregionen – så att de inte blandas ihop med städerna.'],
-  ['2026-11-23T14:00', 'Platsens namn syns alltid helt – långa namn radbryts och krymper.'],
-  ['2026-11-23T14:00', 'Att dra uppåt i en lista uppdaterar inte längre hela appen.'],
-  ['2026-11-23T12:00', 'Överst i flödet syns hur mycket som är nytt sen du var här sist.'],
-  ['2026-11-23T12:00', 'Notiser har fått en egen klocka uppe till höger – under pratbubblan finns bara meddelanden.'],
-  ['2026-11-23T12:00', 'Platsväljaren är luftigare och regionerna stämmer.'],
+  ['2026-11-23T10:40', 'Profil och inställningar och Logga ut finns under ··· på din profil.'],
+  ['2026-11-23T10:22', 'Platsens namn tar bara den plats det behöver, och ikonerna uppe till höger syns alltid.'],
+  ['2026-11-23T10:00', 'Gruppens medlemmar syns direkt som en rad med bilder, admins först.'],
+  ['2026-11-23T10:00', 'Anmäl och liknande finns under ··· på grupper och profiler.'],
+  ['2026-11-23T09:25', 'Listorna som går i sidled (t.ex. grupperna överst) går att dra direkt.'],
+  ['2026-11-23T09:08', 'Regionerna heter som de gör på riktigt – Region Uppsala, Västra Götalandsregionen.'],
+  ['2026-11-23T09:05', 'Att dra uppåt i en lista uppdaterar inte längre hela appen.'],
+  ['2026-11-23T08:50', 'Överst i flödet syns hur mycket som är nytt sen du var här sist.'],
+  ['2026-11-23T08:50', 'Notiser har fått en egen klocka uppe till höger – under pratbubblan finns bara meddelanden.'],
   ['2026-11-23T08:20', 'Redaktionen modererar hela plattformen och tar hand om grupper som saknar admin.'],
   ['2026-11-23T08:20', 'Gå med i en grupp utan admin och be om att bli admin – Redaktionen godkänner.'],
   ['2026-11-23T08:20', 'Siffran på appikonen visar olästa meddelanden, notiser och det du har att göra.'],
@@ -20,4 +21,4 @@ export const CHANGES = [
   ['2026-11-21T12:37', 'Dra ner överst för att uppdatera, och flödet hämtar fler när du når slutet.'],
   ['2026-11-21T12:37', 'Gruppens admins kan lägga till medlemmar och publicera som gruppen.'],
   ['2026-11-20T12:39', 'Prenumerera på evenemangen i din kalender.'],
-].map(([at, text]) => ({ at: new Date(at + '+01:00'), text }));
+].map(([at, text]) => ({ at: new Date(at + '+01:00'), text })).filter((c) => c.at <= new Date());

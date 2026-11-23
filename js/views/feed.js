@@ -78,14 +78,15 @@ function FilterCombo({ value, onChange, options, placeholder }) {
 function SinceLast({ here, posts, where }) {
   const s = useStore();
   const [open, setOpen] = useState(false);
-  const [closed, setClosed] = useState(null);   // stängd för just det här besöket
+  // Stängd med ×: de uppdateringarna visas inte igen (sparas i webbläsaren).
+  const [closedAt, setClosedAt] = useState(() => { try { return new Date(localStorage.getItem('changes-closed') || 0); } catch { return new Date(0); } });
   const since = s.lastVisit;
   if (!since) return null;
   const isNew = (p) => new Date(p.created_at) > since && p.author_id !== s.me.id;
   const fresh = here.filter(isNew).length;
   // Är alla hämtade inlägg nya kan det finnas fler än så.
   const more = !posts.done && (posts.data || []).length > 0 && (posts.data || []).every(isNew);
-  const changes = closed === since ? [] : CHANGES.filter((c) => c.at > since);
+  const changes = CHANGES.filter((c) => c.at > since && c.at > closedAt);
   if (!fresh && !changes.length) return null;
   const MAX = 8;
   return html`<div class="since">
@@ -94,8 +95,8 @@ function SinceLast({ here, posts, where }) {
     ${changes.length > 0 && html`<div class="since-app">
       <button class="since-head" aria-expanded=${open} onClick=${() => setOpen((x) => !x)}>
         <span><b>${changes.length} ${changes.length === 1 ? 'uppdatering' : 'uppdateringar'}</b> av appen sen sist</span>
-        <span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button>
-      <button class="since-x" aria-label="Dölj" onClick=${() => setClosed(since)}>×</button>
+</button>
+      <button class="since-x" aria-label="Dölj" onClick=${() => { const at = new Date(); try { localStorage.setItem('changes-closed', at.toISOString()); } catch {} setClosedAt(at); }}>×</button>
       ${open && html`<ul>${changes.slice(0, MAX).map((c, i) => html`<li key=${i}>${c.text}</li>`)}
         ${changes.length > MAX && html`<li class="muted">… och ${changes.length - MAX} till</li>`}</ul>`}
     </div>`}

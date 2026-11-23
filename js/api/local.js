@@ -179,6 +179,14 @@ export const api = {
   async signInWithProvider() { throw new Error('Inloggning med Google/Apple fungerar bara med Supabase.'); },
   async requestPasswordReset() { throw new Error('I demoläget skickas inga mejl. Skapa ett nytt konto i stället.'); },
   async setNewPassword() {},
+  async beginVisit() {
+    const p = db.profiles.find((x) => x.id === db.session);
+    if (!p) return null;
+    const fresh = !p.visit_started_at || Date.now() - new Date(p.last_seen_at) > 30 * 60e3;
+    if (fresh) { p.prev_visit_at = p.last_seen_at || null; p.visit_started_at = now(); }
+    p.last_seen_at = now(); persist();
+    return p.prev_visit_at || null;
+  },
   async touch() { const p = db.profiles.find((x) => x.id === db.session); if (p) { p.last_seen_at = now(); persist(); } },
   async updateProfile({ name, nickname, avatarFile, home }) {
     const p = db.profiles.find((x) => x.id === needMe());

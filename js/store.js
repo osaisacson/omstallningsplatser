@@ -97,7 +97,7 @@ export async function refreshMe() {
     memberOf: new Set(myGroups.map((g) => g.id)),
     adminOf: new Set(myGroups.filter((g) => g.role === 'admin').map((g) => g.id)),
   });
-  api.touch().catch(() => {});
+  beginVisit();
   refreshBadges();
 }
 
@@ -106,6 +106,10 @@ export async function refreshMe() {
 // i bakgrunden – utan att sidan laddas om eller hoppar.
 const refreshers = new Set();
 export function onRefresh(fn) { refreshers.add(fn); return () => refreshers.delete(fn); }
+// "Sist": när man var här förra gången, enligt kontot (gäller på alla enheter).
+export function beginVisit() {
+  return api.beginVisit().then((prev) => setState({ lastVisit: prev ? new Date(prev) : null }), () => {});
+}
 export const refreshAll = () => Promise.all([...refreshers].map((f) => Promise.resolve(f()).catch(() => {})));
 
 export function useAsync(fn, deps = []) {

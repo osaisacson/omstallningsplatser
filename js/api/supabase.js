@@ -144,6 +144,8 @@ export const api = {
     recovering = false;
   },
   async touch() { if (meId) await sb.rpc('touch'); },
+  // Börjar ett besök (om man varit borta mer än 30 min) och svarar när man var här förra gången.
+  async beginVisit() { if (!meId) return null; return ok(await sb.rpc('begin_visit')); },
   async updateProfile({ name, nickname, avatarFile, home }) {
     if (home) ok(await sb.from('home_places').upsert({ user_id: needMe(), ...cleanHome(home), updated_at: new Date().toISOString() }));
     const patch = {};
