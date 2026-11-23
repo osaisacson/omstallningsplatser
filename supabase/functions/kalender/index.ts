@@ -9,6 +9,8 @@ const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SE
 
 const z = (d: string) => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 const esc = (t: string) => String(t || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/[,;]/g, (m) => '\\' + m);
+// Samma regel som i appen: alla ser evenemanget, om det inte bara är för vissa grupper.
+const open = (p: any) => !p.visible_to || p.visible_to.length === 0;
 const title = (c: string) => (c || '').split(/\n|(?<=[.!?])\s/)[0].slice(0, 80) || 'Evenemang';
 
 function ics(posts: any[], feed = false) {
@@ -35,8 +37,9 @@ Deno.serve(async (req) => {
   const one = params.get('e');
   if (one) {
     if (!/^[0-9a-f-]{36}$/.test(one)) return new Response('Fel id', { status: 400 });
-    const { data: p } = await sb.from('posts').select('id, caption, event_start, event_end, event_address, event_city, created_at, updated_at').eq('id', one).eq('is_event', true).maybeSingle();
-    if (!p) return new Response('Evenemanget finns inte', { status: 404 });
+    const { data: p } = await sb.from('posts').select('id, caption, event_start, event_end, event_address, event_city, created_at, updated_at, visible_to').eq('id', one).eq('is_event', true).maybeSingle();
+    // Länken kräver ingen inloggning, så den lämnar bara ut evenemang som alla får se.
+    if (!p || !open(p)) return new Response('Evenemanget finns inte', { status: 404 });
     return new Response(ics([p]), { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="evenemang.ics"' } });
   }
   const token = params.get('t');
@@ -44,16 +47,21 @@ Deno.serve(async (req) => {
   const { data: who } = await sb.from('user_secrets').select('user_id').eq('calendar_token', token).maybeSingle();
   if (!who) return new Response('Okänd kalender', { status: 404 });
 
-  const [{ data: rsvps }, { data: own }] = await Promise.all([
+  const [{ data: rsvps }, { data: own }, { data: groups }, { data: editor }] = await Promise.all([
     sb.from('event_rsvps').select('post_id').eq('user_id', who.user_id),
     sb.from('posts').select('id').eq('author_id', who.user_id).eq('is_event', true),
+    sb.from('group_members').select('group_id').eq('user_id', who.user_id),
+    sb.from('editors').select('user_id').eq('user_id', who.user_id).not('accepted_at', 'is', null).maybeSingle(),
   ]);
+  const mine = new Set((groups || []).map((g) => g.group_id));
+  // Bara evenemang personen får se i appen: öppna för alla, egna, eller för en grupp personen är med i (Redaktionen ser allt).
+  const canSee = (p: any) => open(p) || p.author_id === who.user_id || !!editor || p.visible_to.some((g: string) => mine.has(g));
   const ids = [...new Set([...(rsvps || []).map((r) => r.post_id), ...(own || []).map((p) => p.id)])];
   const { data: posts } = ids.length
-    ? await sb.from('posts').select('id, caption, event_start, event_end, event_address, event_city, created_at, updated_at').in('id', ids).eq('is_event', true)
+    ? await sb.from('posts').select('id, caption, event_start, event_end, event_address, event_city, created_at, updated_at, author_id, visible_to').in('id', ids).eq('is_event', true)
     : { data: [] };
 
-  return new Response(ics(posts || [], true), {
+  return new Response(ics((posts || []).filter(canSee), true), {
     headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'max-age=900', 'Content-Disposition': 'inline; filename="omstallningsplatser.ics"' },
   });
 });
