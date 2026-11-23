@@ -13,8 +13,8 @@ export function About() {
   return html`<div class="about">
     <blockquote><p>Growth has costs as well as benefits, but we usually don’t count the costs.</p><cite>Meadows (1999)</cite></blockquote>
     <blockquote><p>Earth is now well outside of the safe operating space for humanity.</p><cite>Richardson et al. (2023)</cite></blockquote>
-    <p>Vi lever i en tid som definieras av ett pressande behov av omställning - en omställning till att leva inom planetens gränser och samtidigt ge alla en god levnadsstandard.
-      Men att ställa om ett helt samhälle är ett enormt åtagande. I praktiken betyder det att nästan allt behöver bli annorlunda än i dag:</p>
+    <p>Vi lever i en tid som präglas av ett akut behov av förändring. Vi behöver omorientera samhället mot ett annat mål, där vi fokuserar på att både hålla oss inom planetens gränser och att ge alla en god levnadsstandard.
+      Men en sådan omställning är ingen liten uppgift. I praktiken innebär det att nästan allt behöver bli annorlunda än i dag:</p>
     <blockquote><p>…everything will need to be different: different activities, different forms and uses of energy, different relations, different gender roles,
       different allocations of time between paid and non-paid work, different relations with the non-human world.</p><cite>Kallis et al. (2014, s. 33)</cite></blockquote>
     <p>En sådan omställning är inte lätt att föreställa sig, och samma lösning passar inte alla. Vi behöver hitta sätt att känna att det är hanterbart:
