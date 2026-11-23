@@ -178,20 +178,20 @@ export function Profile({ id }) {
   async function logout() { await api.signOut(); await refreshMe(); go('/'); }
   const editorAct = async (fn, msg) => { if (await attempt(fn, msg)) { await refreshMe(); u.reload(); } };
   return html`<div class="page">
-    <${Header} title=${user.name} back=${!isMe} right=${!isMe ? html`<${MoreMenu} items=${[
+    <${Header} title=${user.name} back=${!isMe} right=${isMe && html`<span class="profile-tools">
+      <a class="iconbtn" href="#/sok" aria-label="Sök" title="Sök"><${Icon} name="search" /></a>
+      ${(s.badges.todos > 0 || s.me.is_editor) && html`<a class="iconbtn" href="#/att-gora" aria-label="Checklista" title="Checklista"><${Icon} name="check" /><${Count} n=${s.badges.todos} /></a>`}
+      <a class="iconbtn" href="#/notiser" aria-label="Notiser" title="Notiser"><${Icon} name="bell" /><${Count} n=${s.badges.notifications} /></a>
+      <a class="iconbtn" href="#/meddelanden" aria-label="Meddelanden" title="Meddelanden"><${Icon} name="chat" /><${Count} n=${s.badges.messages} /></a></span>`} />
+    <div class="profile-head">
+      <span class="profile-more"><${MoreMenu} items=${isMe ? [['Profil och inställningar', () => go('/redigera-profil')], ['Logga ut', logout]] : [
         !s.me.is_editor && ['Anmäl användaren', () => setReporting(true)],
         s.me.is_editor && (user.is_editor
           ? ['Ta bort ur Redaktionen', () => confirm(`Ta bort ${user.name} ur Redaktionen?`) && editorAct(() => api.setEditor(id, false), `${user.name} är inte längre med i Redaktionen`)]
           : user.editor_invited ? ['Inbjuden till Redaktionen – väntar på svar', null]
           : ['Lägg till i Redaktionen', () => setInviting(true)]),
         s.me.is_editor && ['Ta bort användaren', async () => { if (await editorDelete('user', id, `användaren ${user.name} och allt hen lagt upp`)) go('/'); }, 'danger'],
-      ]} />` : html`<span class="profile-tools">
-      <a class="iconbtn" href="#/sok" aria-label="Sök" title="Sök"><${Icon} name="search" /></a>
-      ${(s.badges.todos > 0 || s.me.is_editor) && html`<a class="iconbtn" href="#/att-gora" aria-label="Checklista" title="Checklista"><${Icon} name="check" /><${Count} n=${s.badges.todos} /></a>`}
-      <a class="iconbtn" href="#/notiser" aria-label="Notiser" title="Notiser"><${Icon} name="bell" /><${Count} n=${s.badges.notifications} /></a>
-      <a class="iconbtn" href="#/meddelanden" aria-label="Meddelanden" title="Meddelanden"><${Icon} name="chat" /><${Count} n=${s.badges.messages} /></a>
-      <${MoreMenu} items=${[['Profil och inställningar', () => go('/redigera-profil')], ['Logga ut', logout]]} /></span>`} />
-    <div class="profile-head">
+      ]} /></span>
       <${Avatar} src=${user.avatar_url} name=${user.name} size=${84} />
       <div class="stats">
         <div><b>${posts.data?.length ?? '–'}</b><span>inlägg</span></div>

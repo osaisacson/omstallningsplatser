@@ -57,14 +57,13 @@ export function GroupView({ id }) {
   }
 
   return html`<div class="page">
-    <${Header} title=${grp.name} back right=${html`<span class="profile-tools">
-      ${admin && html`<a class="iconbtn" href=${`#/grupp/${id}/installningar`} aria-label="Gruppinställningar"><${Icon} name="gear" /></a>`}
-      <${MoreMenu} items=${[
+    <${Header} title=${grp.name} back right=${admin && html`<a class="iconbtn" href=${`#/grupp/${id}/installningar`} aria-label="Gruppinställningar"><${Icon} name="gear" /></a>`} />
+    <div class="profile-head">
+      <span class="profile-more"><${MoreMenu} items=${[
         !admin && !s.me.is_editor && ['Anmäl gruppen', () => setReporting(true)],
         // Redaktionen tar bort härifrån bara när den inte kommer åt gruppens inställningar (där finns Ta bort).
         s.me.is_editor && !admin && ['Ta bort gruppen', async () => { if (await editorDelete('group', id, `gruppen ${grp.name} och alla dess inlägg`)) { await refreshMe(); go('/'); } }, 'danger'],
-      ]} /></span>`} />
-    <div class="profile-head">
+      ]} /></span>
       <${Avatar} src=${grp.avatar_url} name=${grp.name} size=${84} />
       <div class="stats">
         <div><b>${list.length}</b><span>inlägg</span></div>
