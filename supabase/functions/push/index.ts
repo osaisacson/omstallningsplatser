@@ -7,12 +7,18 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const kr = (n: number) => new Intl.NumberFormat('sv-SE').format(Math.round(Number(n) || 0)) + ' kr';
 
+// Siffran på appikonen: olästa meddelanden och notiser, finansiering att göra, och för Redaktionen anmälningar och adminförfrågningar.
 async function badgeFor(userId: string) {
-  const [{ count: msgs }, { count: todos }] = await Promise.all([
-    sb.from('messages').select('id', { count: 'exact', head: true }).eq('to_id', userId).eq('read', false),
-    sb.from('comments').select('id, post:posts!inner(author_id)', { count: 'exact', head: true }).in('status', ['applied', 'granted']).eq('post.author_id', userId),
+  const head = { count: 'exact' as const, head: true };
+  const { data: ed } = await sb.from('editors').select('user_id').eq('user_id', userId).not('accepted_at', 'is', null).maybeSingle();
+  const [m, n, t, r, a] = await Promise.all([
+    sb.from('messages').select('id', head).eq('to_id', userId).eq('read', false),
+    sb.from('notifications').select('id', head).eq('user_id', userId).eq('read', false),
+    sb.from('comments').select('id, post:posts!inner(author_id)', head).in('status', ['applied', 'granted']).eq('post.author_id', userId),
+    ed ? sb.from('reports').select('id', head).is('done_at', null) : Promise.resolve({ count: 0 }),
+    ed ? sb.from('admin_requests').select('id', head).eq('status', 'pending') : Promise.resolve({ count: 0 }),
   ]);
-  return (msgs || 0) + (todos || 0);
+  return [m, n, t, r, a].reduce((sum, x: any) => sum + (x.count || 0), 0);
 }
 
 Deno.serve(async (req) => {
