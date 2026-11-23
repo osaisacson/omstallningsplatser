@@ -73,8 +73,8 @@ export function GroupView({ id }) {
       <span>${grp.imported_from
           ? html`Hämtad från <a href=${'https://' + grp.imported_from} target="_blank" rel="noopener noreferrer">${grp.imported_from}</a> och har ingen admin än – Redaktionen tar hand om den så länge.`
           : html`<b>Gruppen har ingen admin</b> just nu – Redaktionen tar hand om den så länge.`}
-        <small>${pending ? 'Din förfrågan om att bli admin väntar på Redaktionen.' : grp.imported_from ? 'Är det er grupp? Bli admin och ta över den.' : 'Är du med i gruppen? Bli admin och ta hand om den.'}</small></span>
-      ${!pending && html`<button class="btn small primary" onClick=${() => (member ? setAsking(true) : join())}>Bli admin</button>`}
+        <small>${s.me.is_editor ? 'Du är med i Redaktionen och kan redan ändra gruppen via kugghjulet uppe till höger.' : pending ? 'Din förfrågan om att bli admin väntar på Redaktionen.' : grp.imported_from ? 'Är det er grupp? Bli admin och ta över den.' : 'Är du med i gruppen? Bli admin och ta hand om den.'}</small></span>
+      ${!pending && !s.me.is_editor && html`<button class="btn small primary" onClick=${() => (member ? setAsking(true) : join())}>Bli admin</button>`}
     </div>`}
     ${member && html`<div class="profile-actions">
       <a class="btn primary" href=${'#/ny?grupp=' + id}>Nytt inlägg</a>
