@@ -1263,3 +1263,9 @@ begin
   on conflict (group_id, user_id) do update set role = 'admin';
   update admin_requests set status = 'accepted' where id = p_id;
 end $$;
+
+-- 028: Grupper, inlägg och platser som har region eller stad men saknar land hör till Sverige
+-- (t.ex. Tempo Nordvärmland hamnade under "Andra länder" i platsväljaren).
+update public.groups set country = 'Sverige' where coalesce(btrim(country), '') = '' and (region is not null or city is not null);
+update public.posts set country = 'Sverige' where group_id is null and coalesce(btrim(country), '') = '' and (region is not null or city is not null);
+update public.home_places set country = 'Sverige' where coalesce(btrim(country), '') = '' and (region is not null or city is not null);
