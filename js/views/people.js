@@ -189,7 +189,8 @@ export function Profile({ id }) {
       <a class="iconbtn" href="#/sok" aria-label="Sök" title="Sök"><${Icon} name="search" /></a>
       ${(s.badges.todos > 0 || s.me.is_editor) && html`<a class="iconbtn" href="#/att-gora" aria-label="Checklista" title="Checklista"><${Icon} name="check" /><${Count} n=${s.badges.todos} /></a>`}
       <a class="iconbtn" href="#/notiser" aria-label="Notiser" title="Notiser"><${Icon} name="bell" /><${Count} n=${s.badges.notifications} /></a>
-      <a class="iconbtn" href="#/meddelanden" aria-label="Meddelanden" title="Meddelanden"><${Icon} name="chat" /><${Count} n=${s.badges.messages} /></a></span>`} />
+      <a class="iconbtn" href="#/meddelanden" aria-label="Meddelanden" title="Meddelanden"><${Icon} name="chat" /><${Count} n=${s.badges.messages} /></a>
+      <${MoreMenu} items=${[['Profil och inställningar', () => go('/redigera-profil')], ['Logga ut', logout]]} /></span>`} />
     <div class="profile-head">
       <${Avatar} src=${user.avatar_url} name=${user.name} size=${84} />
       <div class="stats">
@@ -200,11 +201,9 @@ export function Profile({ id }) {
     <div class="profile-info"><strong>${user.name}</strong>
       ${user.is_editor && html`<a class="role-badge" href="#/hjalp" title="Redaktionen modererar plattformen">Redaktionen</a>`}</div>
     ${(isMe || user.groups.length > 0) && html`<${GroupIcons} groups=${user.groups} canAdd=${isMe} />`}
-    <div class="profile-actions">
-      ${isMe
-        ? html`<a class="btn" href="#/redigera-profil">Profil och inställningar</a><button class="btn" onClick=${logout}>Logga ut</button>`
-        : html`<a class="btn primary" href=${'#/meddelanden/' + id}>Skicka meddelande</a>`}
-    </div>
+    ${!isMe && html`<div class="profile-actions">
+      <a class="btn primary" href=${'#/meddelanden/' + id}>Skicka meddelande</a>
+    </div>`}
     ${isMe && html`<${PushSetting} />`}
     ${isMe && html`<${CalendarSetting} prompt />`}
     ${isMe && user.groups.length === 0 && html`<p class="muted small pad-x">Du är inte med i någon grupp än – tryck på <b>+</b> för att gå med i en eller skapa en ny.</p>`}
@@ -262,7 +261,7 @@ function PushSetting({ settings = false }) {
     if (!(ios && !standalone) || (!settings && dismissed)) return null;
     return html`<div class=${settings ? 'setting-row' : 'nudge badge-setting'}><span>På iPhone fungerar notiser bara i appen sparad på hemskärmen – i Safari frågar telefonen aldrig.
       ${settings && html`<ol class="howto"><li>Tryck på <b>Dela ⬆︎</b> och välj <b>Lägg till på hemskärmen</b>.</li><li>Öppna appen från ikonen på hemskärmen.</li>
-        <li>Gå hit igen (Profil och inställningar) och tryck <b>Slå på</b> – då frågar telefonen om lov.</li></ol>`}</span>
+        <li>Gå hit igen (··· uppe till höger på din profil → Profil och inställningar) och tryck <b>Slå på</b> – då frågar telefonen om lov.</li></ol>`}</span>
       ${!settings && html`<button class="btn small" onClick=${dismiss}>Inte nu</button>`}</div>`;
   }
   async function on() {
