@@ -4,6 +4,7 @@ import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshMe, toast } from '../store.js';
 import { Icon, Avatar, Header, PostGrid, GroupRow, Modal, ImagePicker, Loading, ErrorBox, AddressPicker, ReportForm, editorDelete } from '../ui.js';
 import { prettyUrl, countryNames } from '../util.js';
+import { AdminRequestForm } from './roles.js';
 import { HomePlaceFields, checkHome, emptyHome } from './place.js';
 
 // Land, region och stad för en grupp. Förslag hämtas från andra grupper.
@@ -34,24 +35,33 @@ export function GroupView({ id }) {
   const [hl, setHl] = useState(null); // { highlight, edit }
   const [showMembers, setShowMembers] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const mine = useAsync(() => api.myAdminRequests(), [id]);
   if (g.loading && !g.data) return html`<div class="page"><${Header} title="" back /><${Loading} /></div>`;
   if (g.error) return html`<div class="page"><${Header} title="" back /><${ErrorBox} error=${g.error} /></div>`;
   const grp = g.data;
   const member = s.memberOf.has(id);
-  const admin = s.adminOf.has(id);
+  const hasAdmin = grp.members.some((m) => m.role === 'admin');
+  // En grupp utan admin sköts av Redaktionen.
+  const admin = s.adminOf.has(id) || (!hasAdmin && s.me.is_editor && !grp.locked);
   const list = posts.data || [];
   const cover = (h) => list.find((p) => p.id === h.post_ids[0] && p.slides[0])?.slides[0].image_url;
   const reload = () => { g.reload(); posts.reload(); };
   // Hämtad från t.ex. byggemenskaper.se: bannern visas tills någon annan än den som hämtade gruppen blivit admin.
   const imported = grp.imported_from && !grp.members.some((m) => m.role === 'admin' && m.user.id !== grp.created_by);
 
-  async function join() { if (await attempt(() => api.joinGroup(id), `Välkommen till ${grp.name}!`)) { await refreshMe(); g.reload(); } }
+  async function join() {
+    if (await attempt(() => api.joinGroup(id), `Välkommen till ${grp.name}!`)) {
+      await refreshMe(); g.reload();
+      if (!hasAdmin && !grp.locked) setAsking(true);   // gruppen saknar admin: fråga om man vill bli det
+    }
+  }
 
   return html`<div class="page">
     <${Header} title=${grp.name} back right=${admin && html`<a class="iconbtn" href=${`#/grupp/${id}/installningar`} aria-label="Gruppinställningar"><${Icon} name="gear" /></a>`} />
     ${imported && html`<div class="imported-banner">
       Hämtad från <a href=${'https://' + grp.imported_from} target="_blank" rel="noopener noreferrer">${grp.imported_from}</a>, inte administrerad av gruppen (än).
-      <small>Är det er grupp? Gå med, så gör vi er till admins.</small>
+      <small>Är det er grupp? Gå med och be om att bli admin.</small>
     </div>`}
     <div class="profile-head">
       <${Avatar} src=${grp.avatar_url} name=${grp.name} size=${84} />
@@ -67,6 +77,13 @@ export function GroupView({ id }) {
       <a class="btn primary" href=${'#/ny?grupp=' + id}>Nytt inlägg</a>
     </div>`}
 
+    ${member && !hasAdmin && !grp.locked && html`<div class="nudge admin-nudge">
+      ${(mine.data || []).some((r) => r.group_id === id && r.status === 'pending')
+        ? html`<span>Din förfrågan om att bli admin väntar på Redaktionen.</span>`
+        : html`<span><b>Gruppen har ingen admin</b> – Redaktionen tar hand om den så länge. Vill du bli admin?</span>
+          <button class="btn small primary" onClick=${() => setAsking(true)}>Bli admin</button>`}
+    </div>`}
+    ${asking && html`<${AdminRequestForm} group=${grp} onClose=${() => setAsking(false)} onDone=${() => { setAsking(false); mine.reload(); }} />`}
     <div class="members-head">
       ${!member && !grp.locked && html`<button class="btn primary small" onClick=${join}>Gå med i gruppen</button>`}
       ${grp.locked && html`<span class="muted small">Låst grupp – medlemmarna är <a href="#/hjalp">Redaktionen</a></span>`}
@@ -160,7 +177,8 @@ export function GroupSettings({ id }) {
   if (g.loading && !g.data) return html`<div class="page"><${Header} title="Inställningar" back /><${Loading} /></div>`;
   if (g.error) return html`<div class="page"><${Header} title="Inställningar" back /><${ErrorBox} error=${g.error} /></div>`;
   const grp = g.data;
-  if (!s.adminOf.has(id)) return html`<div class="page"><${Header} title="Inställningar" back /><p class="empty">Bara gruppens admins kan ändra inställningarna.</p></div>`;
+  const redaktionen = s.me.is_editor && !grp.locked && !grp.members.some((m) => m.role === 'admin');   // grupp utan admin sköts av Redaktionen
+  if (!s.adminOf.has(id) && !redaktionen) return html`<div class="page"><${Header} title="Inställningar" back /><p class="empty">Bara gruppens admins kan ändra inställningarna.</p></div>`;
 
   async function save(e) {
     e.preventDefault();

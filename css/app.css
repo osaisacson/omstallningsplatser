@@ -870,3 +870,14 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .theme-add { border-style: dashed; align-items: flex-start; } .theme-add strong { color: var(--accent); }
 .mem-search.combo { position: relative; display: block; } .mem-search .combo-list { left: 16px; right: 16px; }
 .place-why { display: block; margin-top: -6px; }
+.notif-ico { width: 52px; height: 52px; }
+
+/* Roller: Redaktionen och gruppadmins */
+.role-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 14px; }
+.role-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.role-item:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.role-powers { margin: 6px 0 12px; padding-left: 20px; line-height: 1.45; }
+.role-powers li { margin: 3px 0; }
+.modal .btnrow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.admin-nudge { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin: 10px 16px; padding: 10px 12px; }
+.admin-req .btnrow { display: flex; gap: 8px; margin-top: 6px; }

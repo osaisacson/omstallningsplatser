@@ -1,4 +1,5 @@
 // Frågetecknet: feedback, om plattformen, Redaktionen, finansiering och det juridiska.
+import { EDITOR_POWERS } from './roles.js';
 import { html, useState } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, toast } from '../store.js';
@@ -27,7 +28,7 @@ export function About() {
 
 // Villkoren – visas på hjälpsidan och kan fällas ut när man skapar konto.
 export const Terms = () => html`<div class="prose">
-  <p>Omställningsplatser är en ideell, öppen plattform som drivs av gruppen Omställningsplatser. Den är gratis och har ingen reklam.</p>
+  <p>Omställningsplatser är en ideell, öppen plattform som drivs av Redaktionen. Den är gratis och har ingen reklam.</p>
   <ul>
     <li><b>Du måste vara minst 13 år</b> för att skapa ett konto.</li>
     <li><b>Du ansvarar för det du lägger upp.</b> Lägg bara upp sådant du har rätt att dela, och fråga innan du lägger upp bilder där andra syns.</li>
@@ -46,13 +47,9 @@ function Section({ title, open = false, children }) {
 function Editors() {
   const s = useStore();
   const e = useAsync(() => api.listEditors(), []);
-  return html`<p>Redaktionen representerar gruppen ${e.data?.groupId ? html`<a href=${'#/grupp/' + e.data.groupId}>Omställningsplatser</a>` : 'Omställningsplatser'}, som ansvarar för plattformen. Redaktionen</p>
-    <ul>
-      <li>går igenom anmälningar av inlägg, grupper och användare,</li>
-      <li>kan ta bort inlägg, grupper och konton som bryter mot villkoren,</li>
-      <li>markerar feedback som planerad, klar eller inte nu,</li>
-      <li>kan lägga till och ta bort personer i Redaktionen.</li>
-    </ul>
+  return html`<p>Redaktionen modererar hela plattformen och syns som gruppen ${e.data?.groupId ? html`<a href=${'#/grupp/' + e.data.groupId}>Redaktion</a>` : 'Redaktion'}. Den som är med i Redaktionen kan</p>
+    <ul>${EDITOR_POWERS.map((t) => html`<li>${t}</li>`)}</ul>
+    <p>En grupp som saknar admin – till exempel om admin lämnar eller slutar använda appen – sköts av Redaktionen. En medlem kan be om att bli admin, och Redaktionen godkänner. Bara de som redan är med i Redaktionen kan lägga till nya, och den som bjuds in måste själv läsa och godkänna befogenheterna.</p>
     <p>Allt Redaktionen gör sparas i en gemensam historik som alla i Redaktionen ser och kan ångra.</p>
     ${e.loading && !e.data ? html`<${Loading} />` : html`<div class="list editors">${(e.data?.editors || []).map((u) => html`<a class="row" href=${'#/profil/' + u.id} key=${u.id}>
       <${Avatar} src=${u.avatar_url} name=${u.name} size=${36} /><span class="row-main"><strong>${u.name}${u.id === s.me.id ? ' (du)' : ''}</strong></span></a>`)}</div>`}

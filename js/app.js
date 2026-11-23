@@ -10,6 +10,7 @@ import { Notifications, Todos, Inbox, Thread, NewMessage } from './views/inbox.j
 import { MapView } from './views/map.js';
 import { Help, Feedback, FeedbackView } from './views/help.js';
 import { InstallSheet } from './install.js';
+import { RolePrompts } from './views/roles.js';
 import { Memory } from './views/memory.js';
 
 function parse() {
@@ -55,7 +56,7 @@ function BottomNav({ r }) {
     ${item('#/minne', 'Minne', a === 'minne', html`<${Icon} name="memory" size=${26} />`)}
     ${item('#/sok', 'Sök', a === 'sok', html`<${Icon} name="search" size=${26} />`, 0, 'desk')}
     ${item('#/karta', 'Karta', a === 'karta', html`<${Icon} name="map" size=${26} />`, 0, 'desk')}
-    ${item('#/meddelanden', 'Meddelanden', a === 'meddelanden', html`<${Icon} name="chat" size=${26} />`, s.badges.messages, 'desk')}
+    ${item('#/meddelanden', 'Meddelanden', a === 'meddelanden', html`<${Icon} name="chat" size=${26} />`, (s.badges.messages + s.badges.notifications), 'desk')}
     ${(s.badges.todos > 0 || s.me.is_editor) && item('#/att-gora', 'Checklista', a === 'att-gora', html`<${Icon} name="check" size=${26} />`, s.badges.todos, 'desk')}
     ${item('#/ny', 'Nytt inlägg', a === 'ny', html`<span class="nav-new-btn"><${Icon} name="add" size=${26} /></span>`, 0, 'nav-new')}
     ${item('#/hjalp', 'Hjälp och feedback', a === 'hjalp' || a === 'feedback', html`<${Icon} name="help" size=${26} />`)}
@@ -167,6 +168,7 @@ function App() {
     ${s.recovering ? html`<${NewPassword} />` : s.me ? html`<${PullIndicator} ...${pull} />
       <main key=${r.path + '?' + r.query} style=${pull.y ? `transform: translateY(${pull.y}px)` : ''} data-ptr=${pull.state} class=${['karta', 'grupp', 'profil', undefined].includes(r.parts[0]) && r.parts[2] !== 'installningar' ? 'wide' : ''} data-page=${r.parts[0] || 'hem'}><${Safe}>${route(r)}<//></main><${BottomNav} r=${r} />` : html`<${AuthView} />`}
     <${InstallSheet} />
+    ${s.me && html`<${RolePrompts} />`}
     ${s.toast && html`<div class="toast" role="status">${s.toast}</div>`}
   </div>`;
 }

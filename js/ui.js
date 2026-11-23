@@ -54,7 +54,9 @@ export const Loading = () => html`<p class="empty">Laddar…</p>`;
 export const ErrorBox = ({ error }) => html`<p class="empty error">${error?.message || 'Något gick fel.'}</p>`;
 
 let openModals = 0;
-export function Modal({ title, onClose, children }) {
+export function Modal({ title, onClose, children }) {   // utan onClose: en fråga som måste besvaras (inget kryss)
+  const closable = !!onClose;
+  onClose ||= () => {};
   useEffect(() => {
     const k = (e) => e.key === 'Escape' && onClose();
     addEventListener('keydown', k);
@@ -64,7 +66,7 @@ export function Modal({ title, onClose, children }) {
   return html`<div class="modal-bg" onClick=${(e) => e.target === e.currentTarget && onClose()}>
     <div class="modal" role="dialog" aria-modal="true" aria-label=${title}>
       <div class="modal-head"><strong>${title}</strong>
-        <button class="iconbtn" onClick=${onClose} aria-label="Stäng"><${Icon} name="x" /></button></div>
+        ${closable && html`<button class="iconbtn" onClick=${onClose} aria-label="Stäng"><${Icon} name="x" /></button>`}</div>
       <div class="modal-body">${children}</div>
     </div></div>`;
 }

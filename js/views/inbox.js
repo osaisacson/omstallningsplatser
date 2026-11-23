@@ -22,6 +22,10 @@ function EditorChecklist() {
     if (!confirm(`Ångra: ${l.actor?.name || 'någon'} ${l.summary}?` + (l.actor?.id ? ' Hen får en notis om att det ångrades.' : ''))) return;
     if (await attempt(() => api.revertLog(l.id), 'Ångrat – noterat i historiken')) { refreshBadges(); t.reload(); }
   }
+  async function decide(r, yes) {
+    if (await attempt(() => api.decideAdminRequest(r.id, yes), yes ? `${r.user?.name} får bekräfta och blir sedan admin` : 'Avslaget')) { refreshBadges(); t.reload(); }
+  }
+  const adminReqs = t.data?.adminRequests || [];
   const reversible = (l) => !l.reverted_at && ['report_done', 'editor_add', 'editor_remove', 'feedback_status'].includes(l.action);
   const item = (r) => html`<label class=${'todo' + (r.done_at ? ' done' : '')} key=${r.id}>
     <input type="checkbox" checked=${!!r.done_at} onChange=${(e) => check(r, e.target.checked)} />
@@ -32,6 +36,13 @@ function EditorChecklist() {
   if (t.loading && !t.data) return html`<${Loading} />`;
   return html`<section class="todo-sec">
     <h2 class="todo-title">Redaktionens checklista</h2>
+    ${adminReqs.length > 0 && html`<div class="label pad-x">Vill bli admin</div><div class="list">${adminReqs.map((r) => html`<div class="todo admin-req" key=${r.id}>
+      <span class="todo-dot" aria-hidden="true"></span>
+      <span><a href=${'#/profil/' + r.user_id}><strong>${r.user?.name || 'Någon'}</strong></a> vill bli admin för <a href=${'#/grupp/' + r.group_id}><strong>${r.group?.name || 'gruppen'}</strong></a>
+        <small>”${r.message}”</small><small class="muted">${timeAgo(r.created_at)}</small>
+        <span class="btnrow"><button class="btn primary small" onClick=${() => decide(r, true)}>Godkänn</button><button class="btn small" onClick=${() => decide(r, false)}>Avslå</button></span></span>
+    </div>`)}</div>`}
+    ${adminReqs.length > 0 && html`<div class="label pad-x">Anmälningar</div>`}
     <ol class="steps-list"><li>Öppna det som anmälts.</li><li>Ta bort det om det bryter mot villkoren (via ··· eller längst ner på sidan).</li><li>Bocka av det här.</li></ol>
     ${open.length ? html`<div class="list">${open.map(item)}</div>` : html`<p class="muted small pad-x">Inga anmälningar att gå igenom.</p>`}
     ${done.length > 0 && html`<button class="link small pad-x" onClick=${() => setShowDone((x) => !x)}>${showDone ? 'Dölj' : 'Visa'} avbockade (${done.length})</button>
@@ -116,6 +127,11 @@ export function Inbox() {
   const c = useAsync(() => api.listConversations(), []);
   return html`<div class="page">
     <${Header} title="Meddelanden" back right=${html`<a class="iconbtn" href="#/meddelanden/ny" aria-label="Nytt meddelande"><${Icon} name="edit" /></a>`} />
+    <a class=${'row convo notif-row' + (s.badges.notifications ? ' unread' : '')} href="#/notiser">
+      <span class="avatar sys notif-ico"><${Icon} name="bell" size=${22} /></span>
+      <span class="row-main"><strong>Notiser</strong><small class="snippet">${s.badges.notifications ? `${s.badges.notifications} olästa` : 'Kommentarer, ansökningar, beslut och annat som rör dig'}</small></span>
+      ${s.badges.notifications > 0 && html`<span class="convo-side"><span class="unread-dot" aria-label=${`${s.badges.notifications} olästa`}></span></span>`}
+    </a>
     ${c.loading && !c.data ? html`<${Loading} />` : c.error ? html`<${ErrorBox} error=${c.error} />`
       : c.data.length === 0 ? html`<div class="empty">
           <p>Inga meddelanden än.</p><a class="btn primary" href="#/meddelanden/ny">Skriv ett meddelande</a></div>`

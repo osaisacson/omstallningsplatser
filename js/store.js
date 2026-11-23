@@ -68,8 +68,8 @@ export async function refreshBadges() {
   try {
     const badges = await api.badges();
     setState({ badges });
-    // Röd prick/siffra på appikonen: olästa meddelanden + saker att göra med finansiering.
-    const n = (badges.messages || 0) + (badges.todos || 0);
+    // Siffra på appikonen: olästa meddelanden och notiser + saker att göra i checklistan.
+    const n = (badges.messages || 0) + (badges.notifications || 0) + (badges.todos || 0);
     if ('setAppBadge' in navigator) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
   } catch (e) { console.warn(e); }
 }

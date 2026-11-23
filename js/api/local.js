@@ -23,6 +23,8 @@ let db = load();
 // Redaktionen, anmälningar, historik och feedback (läggs till i äldre demodata också).
 db.editors ??= [db.profiles[0]?.id, db.profiles[1]?.id].filter(Boolean);
 db.reports ??= [];
+db.editorInvites ??= [];
+db.adminRequests ??= [];
 db.editorLog ??= [];
 db.feedback ??= [
   { id: uuid0(), author_id: db.profiles[1]?.id, title: 'Visa evenemang på kartan också', body: 'Det vore smidigt att se vad som händer i närheten direkt på kartan.', status: 'planerad', created_at: new Date(Date.now() - 3 * 864e5).toISOString() },
@@ -40,7 +42,13 @@ const emit = () => subs.forEach((f) => f());
 function needMe() { if (!db.session) throw new Error('Du är inte inloggad.'); return db.session; }
 const membership = (gid, uid) => db.members.find((m) => m.group_id === gid && m.user_id === uid);
 function needMember(gid) { const me = needMe(); if (!membership(gid, me)) throw new Error('Bara gruppens medlemmar kan göra det.'); return me; }
-function needAdmin(gid) { const me = needMe(); if (membership(gid, me)?.role !== 'admin') throw new Error('Bara gruppens admins kan göra det.'); return me; }
+// En grupp utan admin sköts av Redaktionen.
+function needAdmin(gid) {
+  const me = needMe();
+  const noAdmin = !db.members.some((m) => m.group_id === gid && m.role === 'admin');
+  if (membership(gid, me)?.role !== 'admin' && !(noAdmin && db.editors.includes(me))) throw new Error('Bara gruppens admins kan göra det.');
+  return me;
+}
 
 const profileOf = (id) => {
   const p = db.profiles.find((x) => x.id === id);
@@ -79,13 +87,8 @@ function notify(user_id, kind, body, extra = {}) {
   db.notifications.push({ id: uuid(), user_id, kind, body, actor_id: extra.actor_id ?? null,
     post_id: extra.post_id ?? null, group_id: extra.group_id ?? null, read: false, created_at: now() });
 }
-function ensureAdmin(gid) {
-  const ms = db.members.filter((m) => m.group_id === gid);
-  if (!ms.length || ms.some((m) => m.role === 'admin')) return;
-  const m = ms.sort((a, b) => a.joined_at.localeCompare(b.joined_at))[0];
-  m.role = 'admin';
-  notify(m.user_id, 'admin', `Du är nu admin för ${groupOf(gid).name} eftersom gruppen saknade admin.`, { group_id: gid });
-}
+// Ingen blir admin automatiskt längre: en grupp utan admin sköts av Redaktionen.
+function ensureAdmin() {}
 function needEditor() { const me = needMe(); if (!db.editors.includes(me)) throw new Error('Bara Redaktionen kan göra det.'); return me; }
 function log(actor_id, action, target_id, summary) { db.editorLog.push({ id: uuid(), actor_id, action, target_id, summary, created_at: now(), reverted_at: null, reverted_by: null }); }
 function removeFeedback(id) {
@@ -149,7 +152,7 @@ export const api = {
   onAuthChange(cb) { subs.add(cb); return () => subs.delete(cb); },
   async getMe() {
     const me = db.session && db.profiles.find((p) => p.id === db.session);
-    return me ? { ...clone(me), is_editor: db.editors.includes(me.id) } : null;
+    return me ? { ...clone(me), is_editor: db.editors.includes(me.id), editor_invited: db.editorInvites.includes(me.id) } : null;
   },
   async signUp({ email, password, name, nickname, avatarFile, home }) {
     email = email.trim().toLowerCase();
@@ -574,12 +577,55 @@ export const api = {
   async setEditor(uid, on) {
     const me = needEditor();
     const has = db.editors.includes(uid);
-    if (on && !has) { db.editors.push(uid); log(me, 'editor_add', uid, `lade till ${profileOf(uid).name} i Redaktionen`); notify(uid, 'admin', 'lade till dig i Redaktionen', { actor_id: me }); }
+    if (on && !has && !db.editorInvites.includes(uid)) { db.editorInvites.push(uid); log(me, 'editor_add', uid, `bjöd in ${profileOf(uid).name} till Redaktionen`); notify(uid, 'admin', 'bjöd in dig till Redaktionen – öppna appen för att läsa och godkänna', { actor_id: me }); }
     if (!on && has) {
       if (db.editors.length <= 1) throw new Error('Redaktionen måste ha minst en person.');
       db.editors = db.editors.filter((x) => x !== uid); log(me, 'editor_remove', uid, `tog bort ${profileOf(uid).name} ur Redaktionen`);
     }
     persist();
+  },
+  async acceptEditor(yes) {
+    const me = needMe();
+    if (!db.editorInvites.includes(me)) throw new Error('Ingen inbjudan att svara på.');
+    db.editorInvites = db.editorInvites.filter((x) => x !== me);
+    if (yes) db.editors.push(me);
+    log(me, yes ? 'editor_accept' : 'editor_decline', me, yes ? 'godkände sina befogenheter och är nu med i Redaktionen' : 'tackade nej till Redaktionen');
+    persist();
+  },
+  async requestAdmin(gid, message) {
+    const me = needMe();
+    const g = db.groups.find((x) => x.id === gid);
+    if (!g || g.locked) throw new Error('Det går inte för den här gruppen.');
+    if (!membership(gid, me)) throw new Error('Gå med i gruppen först.');
+    if (db.members.some((m) => m.group_id === gid && m.role === 'admin')) throw new Error('Gruppen har redan en admin – fråga dem.');
+    if ((message || '').trim().length < 3) throw new Error('Skriv kort om din roll i gruppen.');
+    if (db.adminRequests.some((r) => r.group_id === gid && r.user_id === me && ['pending', 'approved'].includes(r.status))) throw new Error('Du har redan frågat.');
+    db.adminRequests.push({ id: uuid(), group_id: gid, user_id: me, message: message.trim(), status: 'pending', created_at: now() });
+    for (const e of db.editors) if (e !== me) notify(e, 'admin', `vill bli admin för ${g.name} – finns i Redaktionens checklista`, { actor_id: me, group_id: gid });
+    persist();
+  },
+  async decideAdminRequest(id, approve) {
+    const me = needEditor();
+    const r = db.adminRequests.find((x) => x.id === id);
+    if (!r || r.status !== 'pending') throw new Error('Förfrågan är redan behandlad.');
+    r.status = approve ? 'approved' : 'rejected'; r.decided_by = me; r.decided_at = now();
+    const g = groupOf(r.group_id);
+    notify(r.user_id, 'admin', approve ? `godkände att du blir admin för ${g.name} – öppna appen och bekräfta` : `godkände inte att du blir admin för ${g.name}`, { actor_id: me, group_id: r.group_id });
+    log(me, 'admin_request', id, `${approve ? 'godkände' : 'avslog'} ${profileOf(r.user_id).name} som admin för ${g.name}`);
+    persist();
+  },
+  async acceptAdminRole(id) {
+    const me = needMe();
+    const r = db.adminRequests.find((x) => x.id === id && x.user_id === me);
+    if (!r || r.status !== 'approved') throw new Error('Det finns inget godkännande att bekräfta.');
+    const m = membership(r.group_id, me);
+    if (m) m.role = 'admin'; else db.members.push({ group_id: r.group_id, user_id: me, role: 'admin', joined_at: now() });
+    r.status = 'accepted';
+    persist();
+  },
+  async myAdminRequests() {
+    const me = db.session;
+    return db.adminRequests.filter((r) => r.user_id === me && ['pending', 'approved'].includes(r.status)).map((r) => ({ ...clone(r), group: groupOf(r.group_id) }));
   },
   async report(kind, id, name, reason) {
     const me = needMe();
@@ -589,8 +635,9 @@ export const api = {
     persist();
   },
   async editorTodos() {
-    if (!db.editors.includes(db.session)) return { reports: [], log: [] };
+    if (!db.editors.includes(db.session)) return { reports: [], log: [], adminRequests: [] };
     return {
+      adminRequests: db.adminRequests.filter((r) => r.status === 'pending').map((r) => ({ ...clone(r), user: profileOf(r.user_id), group: groupOf(r.group_id) })),
       reports: [...db.reports].sort((a, b) => b.created_at.localeCompare(a.created_at)).map((r) => ({ ...clone(r), reporter: profileOf(r.reporter_id), doer: r.done_by ? profileOf(r.done_by) : null })),
       log: [...db.editorLog].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 30).map((l) => ({ ...clone(l), actor: profileOf(l.actor_id), reverter: l.reverted_by ? profileOf(l.reverted_by) : null })),
     };
@@ -696,7 +743,7 @@ export const api = {
       notifications: db.notifications.filter((n) => n.user_id === me && !n.read).length,
       messages: db.messages.filter((m) => m.to_id === me && !m.read).length,
       todos: db.comments.filter((c) => mine.has(c.post_id) && (c.status === 'granted' || c.status === 'applied')).length
-        + (db.editors.includes(me) ? db.reports.filter((r) => !r.done_at).length : 0),
+        + (db.editors.includes(me) ? db.reports.filter((r) => !r.done_at).length + db.adminRequests.filter((r) => r.status === 'pending').length : 0),
     };
   },
 };

@@ -112,10 +112,11 @@ export const api = {
     const [me, home, editor] = await Promise.all([
       sb.from('profiles').select('*').eq('id', meId).maybeSingle().then(ok),
       sb.from('home_places').select('*').eq('user_id', meId).maybeSingle().then((r) => r.data ?? null, () => null),
-      sb.from('editors').select('user_id').eq('user_id', meId).maybeSingle().then((r) => !!r.data, () => false),
+      sb.from('editors').select('user_id, accepted_at').eq('user_id', meId).maybeSingle().then((r) => r.data, () => null),
     ]);
-    meEditor = editor;
-    return me && { ...me, home, is_editor: editor };
+    meEditor = !!editor?.accepted_at;
+    // Inbjuden till Redaktionen men inte godkänt än: räknas inte som Redaktionen förrän man godkänt.
+    return me && { ...me, home, is_editor: meEditor, editor_invited: !!editor && !editor.accepted_at };
   },
   async signUp({ email, password, name, nickname, avatarFile, home }) {
     if (!name.trim()) throw new Error('Skriv ditt namn.');
@@ -161,8 +162,9 @@ export const api = {
   async getUser(id) {
     const p = ok(await sb.from('profiles').select(`${PROFILE}, nickname, created_at, group_members(role, group:groups(id,name,avatar_url))`).eq('id', id).single());
     const { group_members, ...rest } = p;
-    const editor = ok(await sb.from('editors').select('user_id').eq('user_id', id)).length > 0;
-    return { ...rest, is_editor: editor, groups: group_members.map((m) => ({ ...m.group, role: m.role })) };
+    const ed = ok(await sb.from('editors').select('accepted_at').eq('user_id', id))[0];
+    const editor = !!ed?.accepted_at;
+    return { ...rest, is_editor: editor, editor_invited: !!ed && !ed.accepted_at, groups: group_members.map((m) => ({ ...m.group, role: m.role })) };
   },
 
   // ---- Grupper ----
@@ -374,23 +376,33 @@ export const api = {
   // ---- Redaktionen ----
   async listEditors() {
     const [rows, grp] = await Promise.all([
-      sb.from('editors').select(`added_at, user:profiles!editors_user_id_fkey(${PROFILE})`).order('added_at').then(ok),
-      sb.from('groups').select('id').eq('name', 'Omställningsplatser').limit(1).maybeSingle().then((r) => r.data, () => null),
+      sb.from('editors').select(`added_at, user:profiles!editors_user_id_fkey(${PROFILE})`).not('accepted_at', 'is', null).order('added_at').then(ok),
+      sb.from('groups').select('id').eq('locked', true).limit(1).maybeSingle().then((r) => r.data, () => null),
     ]);
     return { editors: rows.map((r) => r.user), groupId: grp?.id || null };
   },
   async setEditor(uid, on) { ok(await sb.rpc('set_editor', { p_user: uid, p_on: !!on })); },
+  async acceptEditor(yes) { ok(await sb.rpc('accept_editor', { p_yes: !!yes })); },
+  // Gruppadmins: en medlem i en grupp utan admin ber om att bli admin; Redaktionen godkänner; personen bekräftar.
+  async requestAdmin(gid, message) { ok(await sb.rpc('request_admin', { p_group: gid, p_message: message })); },
+  async decideAdminRequest(id, approve) { ok(await sb.rpc('decide_admin_request', { p_id: id, p_approve: !!approve })); },
+  async acceptAdminRole(id) { ok(await sb.rpc('accept_admin_role', { p_id: id })); },
+  async myAdminRequests() {
+    if (!meId) return [];
+    return ok(await sb.from('admin_requests').select('*, group:groups(id,name,avatar_url)').eq('user_id', meId).in('status', ['pending', 'approved']));
+  },
   async report(kind, id, name, reason) {
     if (!reason?.trim()) throw new Error('Skriv kort vad det gäller.');
     ok(await sb.from('reports').insert({ kind, target_id: id, target_name: name || null, reason: reason.trim(), reporter_id: needMe() }));
   },
   async editorTodos() {
-    if (!meEditor) return { reports: [], log: [] };
-    const [reports, log] = await Promise.all([
+    if (!meEditor) return { reports: [], log: [], adminRequests: [] };
+    const [reports, log, adminRequests] = await Promise.all([
       sb.from('reports').select(`*, reporter:profiles!reports_reporter_id_fkey(${PROFILE}), doer:profiles!reports_done_by_fkey(${PROFILE})`).order('created_at', { ascending: false }).limit(100).then(ok),
       sb.from('editor_log').select(`*, actor:profiles!editor_log_actor_id_fkey(${PROFILE}), reverter:profiles!editor_log_reverted_by_fkey(${PROFILE})`).order('created_at', { ascending: false }).limit(30).then(ok),
+      sb.from('admin_requests').select(`*, user:profiles!admin_requests_user_id_fkey(${PROFILE}), group:groups(id,name,avatar_url)`).eq('status', 'pending').order('created_at').then(ok, () => []),
     ]);
-    return { reports, log };
+    return { reports, log, adminRequests };
   },
   async setReportDone(id, done) { ok(await sb.rpc('set_report_done', { p_id: id, p_done: !!done })); },
   async revertLog(id) { ok(await sb.rpc('revert_log', { p_id: id })); },
@@ -436,12 +448,13 @@ export const api = {
   async badges() {
     if (!meId) return { notifications: 0, messages: 0, todos: 0 };
     const count = async (q) => (await q).count ?? 0;
-    const [notifications, messages, todos, reports] = await Promise.all([
+    const [notifications, messages, todos, reports, adminReqs] = await Promise.all([
       count(sb.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', meId).eq('read', false)),
       count(sb.from('messages').select('id', { count: 'exact', head: true }).eq('to_id', meId).eq('read', false)),
       count(sb.from('comments').select('id, post:posts!inner(author_id)', { count: 'exact', head: true }).in('status', ['applied', 'granted']).eq('post.author_id', meId)),
       meEditor ? count(sb.from('reports').select('id', { count: 'exact', head: true }).is('done_at', null)) : 0,
+      meEditor ? count(sb.from('admin_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending')) : 0,
     ]);
-    return { notifications, messages, todos: todos + reports };
+    return { notifications, messages, todos: todos + reports + adminReqs };
   },
 };
