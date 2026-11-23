@@ -3,7 +3,7 @@ import { html, useState, useEffect } from '../lib.js';
 import { api } from '../api/index.js';
 import { APP_NAME, AUTH_PROVIDERS, VAPID_PUBLIC_KEY } from '../config.js';
 import { useStore, useAsync, go, attempt, refreshMe, refreshBadges, setState, toast } from '../store.js';
-import { Icon, Count, Avatar, Header, PostGrid, GroupRow, UserRow, ImagePicker, Loading, ErrorBox, ReportForm, editorDelete } from '../ui.js';
+import { Icon, Count, Avatar, Header, PostGrid, GroupRow, UserRow, ImagePicker, Loading, ErrorBox, ReportForm, MoreMenu, editorDelete } from '../ui.js';
 import { Terms } from './help.js';
 import { AddEditorConfirm } from './roles.js';
 import { HomePlaceFields, checkHome, emptyHome, PlaceSwitcher } from './place.js';
@@ -178,7 +178,14 @@ export function Profile({ id }) {
   async function logout() { await api.signOut(); await refreshMe(); go('/'); }
   const editorAct = async (fn, msg) => { if (await attempt(fn, msg)) { await refreshMe(); u.reload(); } };
   return html`<div class="page">
-    <${Header} title=${user.name} back=${!isMe} right=${isMe && html`<span class="profile-tools">
+    <${Header} title=${user.name} back=${!isMe} right=${!isMe ? html`<${MoreMenu} items=${[
+        !s.me.is_editor && ['Anmäl användaren', () => setReporting(true)],
+        s.me.is_editor && (user.is_editor
+          ? ['Ta bort ur Redaktionen', () => confirm(`Ta bort ${user.name} ur Redaktionen?`) && editorAct(() => api.setEditor(id, false), `${user.name} är inte längre med i Redaktionen`)]
+          : user.editor_invited ? ['Inbjuden till Redaktionen – väntar på svar', null]
+          : ['Lägg till i Redaktionen', () => setInviting(true)]),
+        s.me.is_editor && ['Ta bort användaren', async () => { if (await editorDelete('user', id, `användaren ${user.name} och allt hen lagt upp`)) go('/'); }, 'danger'],
+      ]} />` : html`<span class="profile-tools">
       <a class="iconbtn" href="#/sok" aria-label="Sök" title="Sök"><${Icon} name="search" /></a>
       ${(s.badges.todos > 0 || s.me.is_editor) && html`<a class="iconbtn" href="#/att-gora" aria-label="Checklista" title="Checklista"><${Icon} name="check" /><${Count} n=${s.badges.todos} /></a>`}
       <a class="iconbtn" href="#/notiser" aria-label="Notiser" title="Notiser"><${Icon} name="bell" /><${Count} n=${s.badges.notifications} /></a>
@@ -203,16 +210,6 @@ export function Profile({ id }) {
     ${isMe && user.groups.length === 0 && html`<p class="muted small pad-x">Du är inte med i någon grupp än – tryck på <b>+</b> för att gå med i en eller skapa en ny.</p>`}
     <div class="grid-sep"></div>
     ${posts.data ? html`<${PostGrid} posts=${posts.data} />` : html`<${Loading} />`}
-    <div class="page-foot">
-      ${!isMe && !s.me.is_editor && html`<button class="link muted" onClick=${() => setReporting(true)}>Anmäl användaren</button>`}
-      ${s.me.is_editor && html`<span class="editor-tools">
-        ${isMe ? '' : user.is_editor
-          ? html`<button class="link" onClick=${() => confirm(`Ta bort ${user.name} ur Redaktionen?`) && editorAct(() => api.setEditor(id, false), `${user.name} är inte längre med i Redaktionen`)}>Ta bort ur Redaktionen</button>`
-          : user.editor_invited ? html`<span class="muted">Inbjuden till Redaktionen – väntar på svar</span>`
-          : html`<button class="link" onClick=${() => setInviting(true)}>Lägg till i Redaktionen</button>`}
-        ${!isMe && html`<button class="link danger" onClick=${async () => { if (await editorDelete('user', id, `användaren ${user.name} och allt hen lagt upp`)) go('/'); }}>Ta bort användaren</button>`}
-      </span>`}
-    </div>
     ${inviting && html`<${AddEditorConfirm} user=${user} onClose=${() => setInviting(false)} onDone=${() => { setInviting(false); u.reload(); }} />`}
     ${reporting && html`<${ReportForm} kind="user" id=${id} name=${user.name} onClose=${() => setReporting(false)} />`}
   </div>`;

@@ -2,7 +2,7 @@
 import { html, useState } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshMe, toast } from '../store.js';
-import { Icon, Avatar, Header, PostGrid, GroupRow, Modal, ImagePicker, Loading, ErrorBox, AddressPicker, ReportForm, editorDelete } from '../ui.js';
+import { Icon, Avatar, Header, PostGrid, GroupRow, Modal, ImagePicker, Loading, ErrorBox, AddressPicker, ReportForm, MoreMenu, editorDelete } from '../ui.js';
 import { prettyUrl, countryNames } from '../util.js';
 import { AdminRequestForm } from './roles.js';
 import { HomePlaceFields, checkHome, emptyHome } from './place.js';
@@ -33,7 +33,6 @@ export function GroupView({ id }) {
   const g = useAsync(() => api.getGroup(id), [id]);
   const posts = useAsync(() => api.listPosts({ groupId: id }), [id]);
   const [hl, setHl] = useState(null); // { highlight, edit }
-  const [showMembers, setShowMembers] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [asking, setAsking] = useState(false);
   const mine = useAsync(() => api.myAdminRequests(), [id]);
@@ -58,7 +57,13 @@ export function GroupView({ id }) {
   }
 
   return html`<div class="page">
-    <${Header} title=${grp.name} back right=${admin && html`<a class="iconbtn" href=${`#/grupp/${id}/installningar`} aria-label="Gruppinställningar"><${Icon} name="gear" /></a>`} />
+    <${Header} title=${grp.name} back right=${html`<span class="profile-tools">
+      ${admin && html`<a class="iconbtn" href=${`#/grupp/${id}/installningar`} aria-label="Gruppinställningar"><${Icon} name="gear" /></a>`}
+      <${MoreMenu} items=${[
+        !admin && !s.me.is_editor && ['Anmäl gruppen', () => setReporting(true)],
+        // Redaktionen tar bort härifrån bara när den inte kommer åt gruppens inställningar (där finns Ta bort).
+        s.me.is_editor && !admin && ['Ta bort gruppen', async () => { if (await editorDelete('group', id, `gruppen ${grp.name} och alla dess inlägg`)) { await refreshMe(); go('/'); } }, 'danger'],
+      ]} /></span>`} />
     <div class="profile-head">
       <${Avatar} src=${grp.avatar_url} name=${grp.name} size=${84} />
       <div class="stats">
@@ -84,13 +89,13 @@ export function GroupView({ id }) {
     <div class="members-head">
       ${!member && !grp.locked && html`<button class="btn primary small" onClick=${join}>Gå med i gruppen</button>`}
       ${grp.locked && html`<span class="muted small">Låst grupp – medlemmarna är <a href="#/hjalp">Redaktionen</a></span>`}
-      <button class="members-toggle" aria-expanded=${showMembers} onClick=${() => setShowMembers((x) => !x)}>
-        Medlemmar <span class="muted">(${grp.members.length})</span> <span class="chev">${showMembers ? '▾' : '▸'}</span></button>
+      <span class="members-title">Medlemmar <span class="muted">(${grp.members.length})</span></span>
     </div>
-    ${showMembers && html`<div class="row-scroll">
-      ${grp.members.map((m) => html`<a class="mini" href=${'#/profil/' + m.user.id} key=${m.user.id}>
-        <${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${52} />
-        <span>${m.user.name.split(' ')[0]}</span>${m.role === 'admin' && html`<small class="role">admin</small>`}</a>`)}
+    ${grp.members.length > 0 && html`<div class="row-scroll members-row">
+      ${[...grp.members].sort((a, b) => (b.role === 'admin') - (a.role === 'admin')).map((m) => html`<a class="mini member" href=${'#/profil/' + m.user.id} key=${m.user.id}
+        title=${m.role === 'admin' ? `${m.user.name} (admin)` : m.user.name}>
+        <span class="member-av"><${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${40} />${m.role === 'admin' && html`<span class="admin-badge" aria-label="admin">★</span>`}</span>
+        <span>${m.user.name.split(' ')[0]}</span></a>`)}
     </div>`}
 
     ${(member || grp.highlights.length > 0) && html`<div class="label pad-x">Höjdpunkter</div>
@@ -104,10 +109,6 @@ export function GroupView({ id }) {
     <div class="grid-sep"></div>
     <${PostGrid} posts=${list} showAuthor empty="Gruppen har inga inlägg än." />
 
-    <div class="page-foot">
-      ${!admin && !s.me.is_editor && html`<button class="link muted" onClick=${() => setReporting(true)}>Anmäl gruppen</button>`}
-      ${s.me.is_editor && !admin && html`<button class="link danger" onClick=${async () => { if (await editorDelete('group', id, `gruppen ${grp.name} och alla dess inlägg`)) { await refreshMe(); go('/'); } }}>Ta bort gruppen</button>`}
-    </div>
     ${reporting && html`<${ReportForm} kind="group" id=${id} name=${grp.name} onClose=${() => setReporting(false)} />`}
 
     ${hl && !hl.edit && html`<${Modal} title=${hl.highlight.title} onClose=${() => setHl(null)}>

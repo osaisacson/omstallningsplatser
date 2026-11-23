@@ -1,6 +1,8 @@
 // Vad som är nytt i appen. Visas överst i flödet som "N uppdateringar sen sist" för den som varit här förut.
 // Lägg nya rader överst: när (svensk tid) och en kort mening som en användare förstår.
 export const CHANGES = [
+  ['2026-11-23T17:00', 'Gruppens medlemmar syns direkt som en rad med bilder, admins först.'],
+  ['2026-11-23T17:00', 'Anmäl och liknande finns under ··· uppe till höger på grupper och profiler.'],
   ['2026-11-23T16:00', 'Listorna som går i sidled (t.ex. grupperna överst) går att dra direkt, utan att man behöver ta nytt tag.'],
   ['2026-11-23T15:00', 'Regionerna heter som de gör på riktigt – Region Uppsala, Västra Götalandsregionen – så att de inte blandas ihop med städerna.'],
   ['2026-11-23T14:00', 'Platsens namn syns alltid helt – långa namn radbryts och krymper.'],

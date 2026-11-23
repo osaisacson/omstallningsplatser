@@ -331,6 +331,19 @@ export function PostMenu({ post, onChange }) {
   </span>`;
 }
 
+// ··· uppe till höger på grupp- och profilsidor: anmäl, ta bort och liknande. items: [etikett, funktion, klass]
+export function MoreMenu({ items }) {
+  const [open, setOpen] = useState(false);
+  const list = items.filter(Boolean);
+  if (!list.length) return null;
+  return html`<span>
+    <button class="iconbtn" aria-label="Fler val" title="Fler val" onClick=${() => setOpen(true)}><${Icon} name="dots" /></button>
+    ${open && html`<${Sheet} onClose=${() => setOpen(false)}>
+      ${list.map(([label, fn, cls]) => html`<button class=${'sheet-item ' + (cls || '')} disabled=${!fn} onClick=${() => { setOpen(false); fn?.(); }}>${label}</button>`)}
+    <//>`}
+  </span>`;
+}
+
 // Evenemang: när, var, anmälan och "lägg till i min kalender".
 export function EventBox({ post: p }) {
   const [mine, setMine] = useState(p.rsvp_mine);
