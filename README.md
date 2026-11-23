@@ -47,6 +47,19 @@ insert into public.app_settings (key, value) values
 
 Ett nyckelpar skapas t.ex. med `npx web-push generate-vapid-keys`. Lägg aldrig den privata nyckeln i koden.
 
+
+### Mejl (via Gmail)
+
+Mejlen i tabellen `email_outbox` (t.ex. till admins som inte loggat in på ett år) skickas av funktionen `mejl`
+via omstallningsplatser@gmail.com. Skapa den som de andra (namn `mejl`, **Verify JWT** av) och gör sedan så här:
+
+1. Slå på tvåstegsverifiering på Gmail-kontot och skapa ett **applösenord** på myaccount.google.com/apppasswords.
+2. Supabase → **Edge Functions → Secrets**: lägg till `GMAIL_USER` = `omstallningsplatser@gmail.com` och `GMAIL_APP_PASSWORD` = applösenordet.
+3. Samma applösenord kan användas för inloggningsmejlen: **Authentication → Emails → SMTP Settings**
+   (host `smtp.gmail.com`, port `465`, användare = Gmail-adressen).
+
+Nya mejl skickas direkt. Med `pg_cron` påslaget försöks misslyckade mejl igen varje timme (se `cron.sql`).
+
 ## Publicera
 
 Det är bara statiska filer, så vilken gratis webbhost som helst fungerar: GitHub Pages, Netlify eller Cloudflare Pages.
