@@ -79,19 +79,29 @@ function usePullToRefresh(onRefresh) {
     const ios = /iphone|ipad/i.test(navigator.userAgent);
     const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
     if (ios && !standalone) return;
-    let startY = null, y = 0, busy = false;
+    let startY = null, startX = 0, y = 0, busy = false, locked = false;
     const down = (e) => {
       if (busy || window.scrollY > 0 || document.body.classList.contains('locked') || e.touches.length !== 1) return;
       if (e.target.closest('input, textarea, select, .map-box, .modal, .sheet, .carousel, .dd-bg, .combo-list, .ta-list')) return;
       // Inne i något som skrollar för sig själv (t.ex. en lista) är det den som ska skrollas, inte sidan som ska uppdateras.
       for (let el = e.target; el && el !== document.body; el = el.parentElement) {
-        if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return;
+        const cs = getComputedStyle(el);
+        if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(cs.overflowY)) return;
+        // Sidledes listor (grupperna överst, medlemmar): där är det sidledes skroll som gäller.
+        if (el.scrollWidth > el.clientWidth + 1 && /(auto|scroll)/.test(cs.overflowX)) return;
       }
-      startY = e.touches[0].clientY; y = 0;
+      startY = e.touches[0].clientY; startX = e.touches[0].clientX; y = 0; locked = false;
     };
     const move = (e) => {
       if (startY == null) return;
       const d = e.touches[0].clientY - startY;
+      // Rör sig fingret mest åt sidan är det inte en nerdragning – släpp den direkt så att inget annat störs.
+      if (!locked) {
+        const dx = Math.abs(e.touches[0].clientX - startX);
+        if (dx < 8 && Math.abs(d) < 8) return;
+        if (dx > Math.abs(d)) { startY = null; if (y) setSt({ y: 0, state: 'idle' }); y = 0; return; }
+        locked = true;
+      }
       if (d <= 0 || window.scrollY > 0) { if (y) setSt({ y: 0, state: 'idle' }); y = 0; return; }
       y = Math.min(130, d < 110 ? d * 0.6 : 66 + (d - 110) * 0.25);   // gummibandskänsla: allt trögare ju längre man drar
       setSt({ y, state: 'pull' });

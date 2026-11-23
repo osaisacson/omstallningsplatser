@@ -26,6 +26,8 @@ const REGION_NAMES = {
   'västernorrlands län': 'Region Västernorrland', 'västmanlands län': 'Region Västmanland', 'västra götalands län': 'Västra Götalandsregionen',
   'örebro län': 'Region Örebro län', 'östergötlands län': 'Region Östergötland',
 };
+// Tillbaka från regionnamnet till länets namn som sparas (Region Uppsala → Uppsala län).
+export const regionKey = (name) => Object.keys(REGION_NAMES).find((k) => REGION_NAMES[k].toLowerCase() === String(name || '').trim().toLowerCase())?.replace(/^./, (c) => c.toUpperCase()).replace(/ götalands/, ' Götalands') || name;
 export const regionName = (r) => REGION_NAMES[String(r || '').trim().toLowerCase()] || String(r || '');
 // Sorteras på själva namnet, inte på ordet "Region".
 export const regionSortKey = (name) => String(name || '').replace(/^Region /, '');

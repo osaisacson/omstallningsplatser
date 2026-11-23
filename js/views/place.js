@@ -4,7 +4,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, setPlace, onRefresh } from '../store.js';
 import { Sheet } from '../ui.js';
-import { getOnlyCountry, learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, regionSortKey, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
+import { getOnlyCountry, learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, regionKey, regionSortKey, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
 
 const lc = (x) => (x || '').toLowerCase();
 const LEVEL_TITLE = { country: 'land', region: 'region', city: 'stad', district: 'stadsdel' };
@@ -253,7 +253,8 @@ export function Combo({ label, value, options, onInput, onCommit, placeholder, a
 // Varje fält visas när det förra är ifyllt. value: { country, region, city, postcode, district, level }
 export function HomePlaceFields({ value, onChange, groups, legend = 'Var håller du till?', chooseLevel = true }) {
   const v = value;
-  const [draft, setDraft] = useState({ country: v.country || '', region: v.region || '', city: v.city || '' });
+  // Regionen visas med sitt namn (Region Uppsala) men sparas som länet (Uppsala län).
+  const [draft, setDraft] = useState({ country: v.country || '', region: v.region ? regionName(v.region) : '', city: v.city || '' });
   const [pcState, setPcState] = useState('');
   const set = (patch) => onChange({ ...v, ...patch });
   const all = groups || [];
@@ -264,27 +265,28 @@ export function HomePlaceFields({ value, onChange, groups, legend = 'Var håller
       ...extra.filter((x) => !seen.has(lc(x))).map((name) => ({ name }))];
   };
   const countries = opt(count('country', () => true), countryNames());
-  const regions = v.country ? opt(count('region', (g) => lc(g.country) === lc(v.country)), lc(v.country) === 'sverige' ? SE_REGIONS : []) : [];
+  const regions = v.country ? opt(count('region', (g) => lc(g.country) === lc(v.country)), lc(v.country) === 'sverige' ? SE_REGIONS : []).map((o) => ({ ...o, name: regionName(o.name) })) : [];
   const inRegion = count('city', (g) => lc(g.country) === lc(v.country) && lc(g.region) === lc(v.region));
   // Städer i den valda regionen först, sedan andra städer i landet (med sin region utskriven).
   const regionOf = new Map(all.filter((g) => g.city && lc(g.country) === lc(v.country)).map((g) => [lc(g.city), g.region]));
   const cities = v.country ? [...opt(inRegion), ...[...count('city', (g) => lc(g.country) === lc(v.country)).entries()]
-    .filter(([name]) => !inRegion.has(name)).map(([name]) => ({ name, sub: regionOf.get(lc(name)) || '' }))] : [];
+    .filter(([name]) => !inRegion.has(name)).map(([name]) => ({ name, sub: regionName(regionOf.get(lc(name))) }))] : [];
 
   const DOWN = { country: ['region', 'city', 'postcode', 'district'], region: ['city', 'postcode', 'district'], city: ['postcode', 'district'] };
   // Skriver man om ett valt fält gäller valet inte längre – fälten under döljs tills man valt igen.
   const typing = (k, t) => {
     setDraft((d) => ({ ...d, [k]: t }));
-    if (v[k] && t !== v[k]) set({ [k]: null, ...Object.fromEntries(DOWN[k].map((x) => [x, null])), level: v.level === 'district' ? 'city' : v.level });
+    if (v[k] && (k === 'region' ? regionKey(t) : t) !== v[k]) set({ [k]: null, ...Object.fromEntries(DOWN[k].map((x) => [x, null])), level: v.level === 'district' ? 'city' : v.level });
   };
   // Ett nytt val längre upp tömmer fälten under.
   const commit = (k, name) => {
+    if (k === 'region') name = regionKey(name);
     const down = DOWN[k];
-    setDraft((d) => ({ ...d, [k]: name, ...Object.fromEntries(down.filter((x) => x in d).map((x) => [x, ''])) }));
+    setDraft((d) => ({ ...d, [k]: k === 'region' ? regionName(name) : name, ...Object.fromEntries(down.filter((x) => x in d).map((x) => [x, ''])) }));
     if (v[k] && lc(name) === lc(v[k])) return set({ [k]: name });
     // En stad som redan finns i en annan region tar med sig sin region.
     const region = k === 'city' && regionOf.get(lc(name));
-    if (region && lc(region) !== lc(v.region)) setDraft((d) => ({ ...d, region }));
+    if (region && lc(region) !== lc(v.region)) setDraft((d) => ({ ...d, region: regionName(region) }));
     set({ [k]: name, ...(region ? { region } : {}), ...Object.fromEntries(down.map((x) => [x, null])), level: v.level === 'district' ? 'city' : v.level });
     setPcState('');
   };
@@ -303,7 +305,7 @@ export function HomePlaceFields({ value, onChange, groups, legend = 'Var håller
     <legend class="label">${legend}</legend>
     <${Combo} label="Land" value=${draft.country} options=${countries} placeholder="Börja skriva, t.ex. Sverige"
       committed=${!!v.country} onInput=${(t) => typing('country', t)} onCommit=${(n) => commit('country', n)} />
-    ${v.country && html`<${Combo} label="Region" value=${draft.region} options=${regions} placeholder=${lc(v.country) === 'sverige' ? 'Börja skriva, t.ex. Västra Götalands län' : 'Börja skriva'}
+    ${v.country && html`<${Combo} label="Region" value=${draft.region} options=${regions} placeholder=${lc(v.country) === 'sverige' ? 'Börja skriva, t.ex. Västra Götalandsregionen' : 'Börja skriva'}
       committed=${!!v.region} onInput=${(t) => typing('region', t)} onCommit=${(n) => commit('region', n)} />`}
     ${v.country && v.region && html`<${Combo} label="Stad" value=${draft.city} options=${cities} placeholder="Börja skriva, t.ex. Göteborg"
       committed=${!!v.city} onInput=${(t) => typing('city', t)} onCommit=${(n) => commit('city', n)} />`}
