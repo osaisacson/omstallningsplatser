@@ -82,7 +82,11 @@ function usePullToRefresh(onRefresh) {
     let startY = null, y = 0, busy = false;
     const down = (e) => {
       if (busy || window.scrollY > 0 || document.body.classList.contains('locked') || e.touches.length !== 1) return;
-      if (e.target.closest('input, textarea, select, .map-box, .modal, .sheet, .carousel')) return;
+      if (e.target.closest('input, textarea, select, .map-box, .modal, .sheet, .carousel, .dd-bg, .combo-list, .ta-list')) return;
+      // Inne i något som skrollar för sig själv (t.ex. en lista) är det den som ska skrollas, inte sidan som ska uppdateras.
+      for (let el = e.target; el && el !== document.body; el = el.parentElement) {
+        if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return;
+      }
       startY = e.touches[0].clientY; y = 0;
     };
     const move = (e) => {

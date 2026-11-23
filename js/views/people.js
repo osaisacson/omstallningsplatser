@@ -204,7 +204,7 @@ export function Profile({ id }) {
     <div class="grid-sep"></div>
     ${posts.data ? html`<${PostGrid} posts=${posts.data} />` : html`<${Loading} />`}
     <div class="page-foot">
-      ${!isMe && html`<button class="link muted" onClick=${() => setReporting(true)}>Anmäl användaren</button>`}
+      ${!isMe && !s.me.is_editor && html`<button class="link muted" onClick=${() => setReporting(true)}>Anmäl användaren</button>`}
       ${s.me.is_editor && html`<span class="editor-tools">
         ${isMe ? '' : user.is_editor
           ? html`<button class="link" onClick=${() => confirm(`Ta bort ${user.name} ur Redaktionen?`) && editorAct(() => api.setEditor(id, false), `${user.name} är inte längre med i Redaktionen`)}>Ta bort ur Redaktionen</button>`

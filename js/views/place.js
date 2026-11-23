@@ -77,11 +77,30 @@ function useDistrictNames(list) {
 const DEFAULT_PLACE = { level: 'district', country: 'Sverige', region: 'Västra Götalands län', city: 'Göteborg', district: 'Majorna', postcode: null, postcodes: [] };
 const crumbName = (place, l) => (l === 'region' ? regionName(place.region) : l === 'district' ? place.district || fmtPostcode(place.postcode) : place[l]);
 
+// Hela namnet ska alltid synas: långa namn radbryts (högst två rader) och texten krymper tills den får plats.
+function useFitText(text) {
+  const ref = useRef();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      let size = 16;
+      el.style.fontSize = size + 'px';
+      while (size > 11 && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) el.style.fontSize = --size + 'px';
+    };
+    fit();
+    addEventListener('resize', fit);
+    return () => removeEventListener('resize', fit);
+  }, [text]);
+  return ref;
+}
+
 export function PlaceSwitcher({ groups }) {
   const s = useStore();
   const place = s.place || { level: 'world' };
   const [open, setOpen] = useState(null);   // nivån vars rullgardin är öppen
   const extras = usePlaceExtras();
+  const nameRef = useFitText(placeLabel(place));
   const depth = LEVELS.indexOf(place.level);
   const next = LEVELS[depth + 1];
   // En stadsdel som bara har postnummer får sitt namn (t.ex. 752 25 → Luthagen) när det går att slå upp.
@@ -116,7 +135,7 @@ export function PlaceSwitcher({ groups }) {
         aria-label=${out ? `Zooma ut till ${placeLabel(out)}` : 'Zooma ut'} title=${out ? placeLabel(out) : ''}>‹</button>
       <button class=${'place-btn' + (open ? ' open' : '') + (locked ? ' locked' : '')} onClick=${() => !locked && setOpen(open ? null : pickLevel)}
         aria-disabled=${locked} aria-label=${locked ? `Visar ${placeLabel(place)}` : `Visar ${placeLabel(place)}. Tryck för att byta`}>
-        <span class="place-name">${placeLabel(place)}${!locked && html`<span class="chev" aria-hidden="true">▾</span>`}</span>
+        <span class="place-name" ref=${nameRef}>${placeLabel(place)}${!locked && html`<span class="chev" aria-hidden="true">▾</span>`}</span>
       </button>
       ${next && html`<button class="zoom" onClick=${forward} aria-label=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}
         title=${place.level === 'world' ? 'Gå till din plats' : `Välj ${LEVEL_TITLE[next]}`}>›</button>`}

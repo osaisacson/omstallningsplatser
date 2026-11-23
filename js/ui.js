@@ -310,8 +310,9 @@ export function PostMenu({ post, onChange }) {
     items.push(['Ta bort', del, 'danger']);
   } else {
     items.push(['Be om ändring', () => setReq('edit')]);
-    items.push(['Be om borttagning', () => setReq('remove')]);
-    items.push(['Anmäl till Redaktionen', () => setReporting(true)]);
+    // Den som själv kan ta bort (gruppadmin, Redaktionen) får inte "be om borttagning" eller anmäla till sig själv.
+    if (!editor && !admin) items.push(['Be om borttagning', () => setReq('remove')]);
+    if (!editor) items.push(['Anmäl till Redaktionen', () => setReporting(true)]);
     if (admin) items.push(['Ta bort (som gruppadmin)', del, 'danger']);
     else if (editor) items.push(['Ta bort (Redaktionen)', async () => {
       if (await editorDelete('post', post.id, 'inlägget')) { if (location.hash.startsWith('#/post/')) go('/'); else onChange?.(); }

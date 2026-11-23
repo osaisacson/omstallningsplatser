@@ -1,6 +1,8 @@
 // Vad som är nytt i appen. Visas överst i flödet som "N uppdateringar sen sist" för den som varit här förut.
 // Lägg nya rader överst: när (svensk tid) och en kort mening som en användare förstår.
 export const CHANGES = [
+  ['2026-11-23T14:00', 'Platsens namn syns alltid helt – långa namn radbryts och krymper.'],
+  ['2026-11-23T14:00', 'Att dra uppåt i en lista uppdaterar inte längre hela appen.'],
   ['2026-11-23T12:00', 'Överst i flödet syns hur mycket som är nytt sen du var här sist.'],
   ['2026-11-23T12:00', 'Notiser har fått en egen klocka uppe till höger – under pratbubblan finns bara meddelanden.'],
   ['2026-11-23T12:00', 'Platsväljaren är luftigare och regionerna stämmer.'],

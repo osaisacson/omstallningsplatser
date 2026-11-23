@@ -59,13 +59,6 @@ export function GroupView({ id }) {
 
   return html`<div class="page">
     <${Header} title=${grp.name} back right=${admin && html`<a class="iconbtn" href=${`#/grupp/${id}/installningar`} aria-label="Gruppinställningar"><${Icon} name="gear" /></a>`} />
-    ${!hasAdmin && !grp.locked && html`<div class="nudge admin-nudge">
-      <span>${grp.imported_from
-          ? html`Hämtad från <a href=${'https://' + grp.imported_from} target="_blank" rel="noopener noreferrer">${grp.imported_from}</a> och har ingen admin än – Redaktionen tar hand om den så länge.`
-          : html`<b>Gruppen har ingen admin</b> just nu – Redaktionen tar hand om den så länge.`}
-        <small>${pending ? 'Din förfrågan om att bli admin väntar på Redaktionen.' : grp.imported_from ? 'Är det er grupp? Bli admin och ta över den.' : 'Är du med i gruppen? Bli admin och ta hand om den.'}</small></span>
-      ${!pending && html`<button class="btn small primary" onClick=${() => (member ? setAsking(true) : join())}>Bli admin</button>`}
-    </div>`}
     <div class="profile-head">
       <${Avatar} src=${grp.avatar_url} name=${grp.name} size=${84} />
       <div class="stats">
@@ -76,6 +69,13 @@ export function GroupView({ id }) {
     </div>
     <div class="profile-info"><strong>${grp.name}</strong>${placeText(grp) && html`<span class="group-place">${placeText(grp)}</span>`}${grp.description && html`<p>${grp.description}</p>`}
       ${grp.homepage && html`<a class="homepage" href=${grp.homepage} target="_blank" rel="noopener noreferrer">${prettyUrl(grp.homepage)}</a>`}</div>
+    ${!hasAdmin && !grp.locked && html`<div class="nudge admin-nudge">
+      <span>${grp.imported_from
+          ? html`Hämtad från <a href=${'https://' + grp.imported_from} target="_blank" rel="noopener noreferrer">${grp.imported_from}</a> och har ingen admin än – Redaktionen tar hand om den så länge.`
+          : html`<b>Gruppen har ingen admin</b> just nu – Redaktionen tar hand om den så länge.`}
+        <small>${pending ? 'Din förfrågan om att bli admin väntar på Redaktionen.' : grp.imported_from ? 'Är det er grupp? Bli admin och ta över den.' : 'Är du med i gruppen? Bli admin och ta hand om den.'}</small></span>
+      ${!pending && html`<button class="btn small primary" onClick=${() => (member ? setAsking(true) : join())}>Bli admin</button>`}
+    </div>`}
     ${member && html`<div class="profile-actions">
       <a class="btn primary" href=${'#/ny?grupp=' + id}>Nytt inlägg</a>
     </div>`}
@@ -105,8 +105,8 @@ export function GroupView({ id }) {
     <${PostGrid} posts=${list} showAuthor empty="Gruppen har inga inlägg än." />
 
     <div class="page-foot">
-      ${!admin && html`<button class="link muted" onClick=${() => setReporting(true)}>Anmäl gruppen</button>`}
-      ${s.me.is_editor && html`<button class="link danger" onClick=${async () => { if (await editorDelete('group', id, `gruppen ${grp.name} och alla dess inlägg`)) { await refreshMe(); go('/'); } }}>Ta bort gruppen (Redaktionen)</button>`}
+      ${!admin && !s.me.is_editor && html`<button class="link muted" onClick=${() => setReporting(true)}>Anmäl gruppen</button>`}
+      ${s.me.is_editor && !admin && html`<button class="link danger" onClick=${async () => { if (await editorDelete('group', id, `gruppen ${grp.name} och alla dess inlägg`)) { await refreshMe(); go('/'); } }}>Ta bort gruppen</button>`}
     </div>
     ${reporting && html`<${ReportForm} kind="group" id=${id} name=${grp.name} onClose=${() => setReporting(false)} />`}
 
