@@ -1,7 +1,7 @@
 // Demoläge: samma funktioner som supabase.js men allt sparas i webbläsarens localStorage.
 // Reglerna här speglar reglerna i supabase/setup.sql.
 import { materializeSeed } from '../seed.js';
-import { postThemes, MEMORY_THEMES, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage, blobToDataURL } from '../util.js';
+import { MENTION_RE, postThemes, MEMORY_THEMES, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage, blobToDataURL } from '../util.js';
 
 const KEY = 'omstallningsplatser-demo-v7';
 // Demodata sparad under appens gamla namn flyttas över.
@@ -77,6 +77,16 @@ function chatsFor(me) {
       member_count: c.group_id ? db.members.filter((m) => m.group_id === c.group_id).length : db.chatMembers.filter((m) => m.chat_id === c.id).length };
   }).filter((c) => !c.group_id || c.last_body || db.chatMembers.some((m) => m.chat_id === c.id && m.user_id === me))
     .sort((a, b) => b.last_message_at.localeCompare(a.last_message_at));
+}
+// Omnämnanden: den som nämns (och får se inlägget) får en notis.
+function notifyMentions(text, me, post, what, once = false) {
+  const ids = [...new Set([...String(text || '').matchAll(MENTION_RE)].map((m) => m[2]))];
+  for (const u of ids) {
+    if (u === me || !db.profiles.some((p) => p.id === u)) continue;
+    if (post.visible_to?.length && !db.editors.includes(u) && !db.members.some((m) => m.user_id === u && post.visible_to.includes(m.group_id))) continue;
+    if (once && db.notifications.some((n) => n.user_id === u && n.kind === 'mention' && n.post_id === post.id && n.body === what)) continue;
+    notify(u, 'mention', what, { actor_id: me, post_id: post.id });
+  }
 }
 function needAdmin(gid) {
   const me = needMe();
@@ -397,7 +407,9 @@ export const api = {
       created_at: t, updated_at: t, last_activity_at: t, slides: await buildSlides(v.slides),
     };
     addCategories(v.categories);
-    db.posts.push(post); bump(post); persist();
+    db.posts.push(post); bump(post);
+    notifyMentions(post.caption, me, post, 'nämnde dig i ett inlägg', true);
+    persist();
     return post.id;
   },
   async updatePost(id, input) {
@@ -414,7 +426,9 @@ export const api = {
       p.fin_expires_at = v.finance.expiresAt;
     }
     p.slides = await buildSlides(v.slides);
-    addCategories(v.categories); persist();
+    addCategories(v.categories);
+    notifyMentions(p.caption, me, p, 'nämnde dig i ett inlägg', true);
+    persist();
   },
   async deletePost(id) {
     const me = needMe();
@@ -520,6 +534,7 @@ export const api = {
     bump(p);
     if (p.author_id !== me) notify(p.author_id, 'comment', `${parent ? 'svarade i en tråd på ditt inlägg' : 'kommenterade'}: ${body.slice(0, 80)}`, { actor_id: me, post_id: postId });
     if (parent && parent.author_id !== me && parent.author_id !== p.author_id) notify(parent.author_id, 'reply', `svarade på din kommentar: ${body.slice(0, 80)}`, { actor_id: me, post_id: postId });
+    notifyMentions(body, me, p, 'nämnde dig i en kommentar');
     persist();
   },
   async applyForFunding(postId, { groupId, body, amount, payout }) {

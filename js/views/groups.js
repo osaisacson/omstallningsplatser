@@ -3,7 +3,7 @@ import { html, useState } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshMe, toast } from '../store.js';
 import { Icon, Avatar, Header, PostGrid, GroupRow, Modal, ImagePicker, Loading, ErrorBox, AddressPicker, ReportForm, MoreMenu, VerifiedBadge, editorDelete, linkify } from '../ui.js';
-import { prettyUrl, countryNames } from '../util.js';
+import { prettyUrl, countryNames, plainText } from '../util.js';
 import { AdminRequestForm } from './roles.js';
 import { HomePlaceFields, checkHome, emptyHome } from './place.js';
 
@@ -141,7 +141,7 @@ function HighlightEditor({ groupId, highlight, posts, onClose, onSaved }) {
       <div class="label small">Välj inlägg (${ids.length} valda)</div>
       ${posts.length === 0 ? html`<p class="muted">Gruppen har inga inlägg än.</p>` : html`<div class="grid pick">
         ${posts.map((p) => html`<button type="button" key=${p.id} class=${'tile' + (ids.includes(p.id) ? ' picked' : '')} onClick=${() => toggle(p.id)}>
-          ${p.slides[0] ? html`<img src=${p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${p.caption}</span>`}
+          ${p.slides[0] ? html`<img src=${p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${plainText(p.caption)}</span>`}
           ${ids.includes(p.id) && html`<span class="tick">${ids.indexOf(p.id) + 1}</span>`}</button>`)}</div>`}
       <button class="btn primary block">Spara</button>
       ${highlight.id && html`<button type="button" class="link danger center" onClick=${del}>Ta bort höjdpunkten</button>`}

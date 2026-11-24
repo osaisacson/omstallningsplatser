@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshBadges, refreshMe, onRefresh } from '../store.js';
-import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal } from '../ui.js';
+import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal, MentionField } from '../ui.js';
 import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
 
 import { InstallHint } from '../install.js';
@@ -214,7 +214,7 @@ export function PostView({ id }) {
             <${Comments} post=${post.data} onChange=${post.reload} />
           </section>
           <form class="comment-form" onSubmit=${send}>
-            <input value=${body} onInput=${(e) => setBody(e.target.value)} placeholder="Skriv en kommentar…" aria-label="Kommentar" />
+            <${MentionField} as="input" value=${body} onChange=${setBody} placeholder="Skriv en kommentar… (@ för att nämna någon)" aria-label="Kommentar" />
             <button class="link strong" disabled=${!body.trim() || busy}>Publicera</button>
           </form>
         </div>
@@ -498,8 +498,8 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       </section>
 
       <label class="field">Text till inlägget
-        <textarea rows="4" value=${caption} onInput=${(e) => setCaption(e.target.value)}
-          placeholder=${{ finansiering: 'Vad kan pengarna sökas för? Vem kan söka?', lokal: 'Var finns det, när går det att låna och hur bokar man?' }[type] || 'Berätta vad ni gjort, vad ni lärt er eller vad ni behöver…'}></textarea></label>
+        <${MentionField} rows="4" value=${caption} onChange=${setCaption}
+          placeholder=${{ finansiering: 'Vad kan pengarna sökas för? Vem kan söka?', lokal: 'Var finns det, när går det att låna och hur bokar man?' }[type] || 'Berätta vad ni gjort, vad ni lärt er eller vad ni behöver… Skriv @ för att nämna någon.'} /></label>
 
       ${(type === 'vanlig' || type === 'evenemang') && html`<section class="field">
         <div class="label">Taggar <small class="muted">(valfritt)</small></div>

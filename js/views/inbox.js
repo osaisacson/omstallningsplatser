@@ -3,7 +3,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, goBack, attempt, refreshBadges } from '../store.js';
 import { Icon, Avatar, Header, UserRow, Loading, ErrorBox, linkify } from '../ui.js';
-import { fmtKr, timeAgo } from '../util.js';
+import { fmtKr, timeAgo, plainText } from '../util.js';
 
 const KIND = { post: 'Inlägg', group: 'Grupp', user: 'Användare', feedback: 'Feedback' };
 const targetHref = (r) => ({ post: '#/post/', group: '#/grupp/', user: '#/profil/', feedback: '#/feedback/' }[r.kind] + r.target_id);
@@ -69,7 +69,7 @@ export function Notifications() {
       : html`<div class="list">${n.data.map((x) => html`<a key=${x.id} class=${'row notif' + (x.read ? '' : ' unread')}
           href=${x.post_id ? '#/post/' + x.post_id : x.group_id ? '#/grupp/' + x.group_id : '#/'}>
           ${x.actor ? html`<${Avatar} src=${x.actor.avatar_url} name=${x.actor.name} size=${40} />` : html`<span class="avatar sys">★</span>`}
-          <span class="row-main"><span>${x.actor && html`<strong>${x.actor.name}</strong> `}${x.body}</span>
+          <span class="row-main"><span>${x.actor && html`<strong>${x.actor.name}</strong> `}${plainText(x.body)}</span>
             <small class="muted">${timeAgo(x.created_at)}</small></span></a>`)}</div>`}
   </div>`;
 }
@@ -86,7 +86,7 @@ export function Todos() {
   const open = all.filter((x) => x.status === 'granted');
   const done = all.filter((x) => x.status === 'paid');
   const who = (x) => html`<strong>${x.group?.name || x.author.name}</strong>${x.group ? html` <span class="muted">(via ${x.author.name})</span>` : ''}`;
-  const postLink = (x) => html`<small><a href=${'#/post/' + x.post.id}>${x.post.caption.slice(0, 60)}${x.post.caption.length > 60 ? '…' : ''}</a></small>`;
+  const postLink = (x) => html`<small><a href=${'#/post/' + x.post.id}>${plainText(x.post.caption).slice(0, 60)}${plainText(x.post.caption).length > 60 ? '…' : ''}</a></small>`;
   const payItem = (x) => {
     const bank = x.payout?.startsWith('Bankkonto');
     const to = x.payout?.replace(/^(Swish|Bankkonto):\s*/, '') || '(uppgift saknas)';

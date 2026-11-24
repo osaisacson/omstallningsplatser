@@ -3,7 +3,7 @@ import { html, useState, useEffect, useRef } from './lib.js';
 import { api } from './api/index.js';
 import { SUPABASE_URL } from './config.js';
 import { state, go, goBack, toast, refreshBadges, refreshMe, attempt, useAsync } from './store.js';
-import { fmtKr, fmtDate, timeAgo, PAYOUT_BANK_LIMIT, SPACE_COSTS, postType, fmtEventTime, eventTitle, calendarSubscribed, MEMORY_THEMES } from './util.js';
+import { fmtKr, fmtDate, timeAgo, PAYOUT_BANK_LIMIT, SPACE_COSTS, postType, fmtEventTime, eventTitle, calendarSubscribed, MEMORY_THEMES, plainText, toEditable, fromEditable } from './util.js';
 
 const ICONS = {
   home: '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
@@ -396,7 +396,7 @@ export function PostMenu({ post, onChange }) {
     <//>`}
     ${req && html`<${RequestForm} post=${post} kind=${req} onClose=${() => setReq(null)} />`}
     ${moving && html`<${ThemesEditor} post=${post} onClose=${() => setMoving(false)} onDone=${() => { setMoving(false); onChange?.(); }} />`}
-    ${reporting && html`<${ReportForm} kind="post" id=${post.id} name=${(post.caption || 'Inlägg').slice(0, 60)} onClose=${() => setReporting(false)} />`}
+    ${reporting && html`<${ReportForm} kind="post" id=${post.id} name=${plainText(post.caption || 'Inlägg').slice(0, 60)} onClose=${() => setReporting(false)} />`}
   </span>`;
 }
 
@@ -539,7 +539,7 @@ export function LikeButton({ liked, count, onToggle, size = 22, label = 'inlägg
 // Dela: telefonens egna delningsmeny när den finns, annars kopieras länken.
 export async function sharePost(p) {
   const url = `${location.origin}${location.pathname}#/post/${p.id}`;
-  const title = (p.caption || 'Inlägg').split('\n')[0].slice(0, 80);
+  const title = plainText(p.caption || 'Inlägg').split('\n')[0].slice(0, 80);
   try {
     if (navigator.share) { await navigator.share({ title, text: title, url }); return; }
   } catch (e) { if (e?.name === 'AbortError') return; }
@@ -569,7 +569,7 @@ export function PostCard({ post: p, onChange, full = false }) {
         <button class="action" aria-label="Dela inlägget" onClick=${() => sharePost(p)}><${Icon} name="share" size=${22} /></button>
         <${MemoryButton} post=${p} onChange=${onChange} />
       </div>
-      ${!full && p.first_comment && html`<a class="first-comment" href=${'#/post/' + p.id}><strong>${p.first_comment.group?.name || p.first_comment.author.name}</strong> ${p.first_comment.body}</a>`}
+      ${!full && p.first_comment && html`<a class="first-comment" href=${'#/post/' + p.id}><strong>${p.first_comment.group?.name || p.first_comment.author.name}</strong> ${plainText(p.first_comment.body)}</a>`}
       ${edited && html`<div class="time">Redigerad</div>`}
     </div>
     ${applying && html`<${ApplyForm} post=${p} onClose=${() => setApplying(false)}
@@ -637,7 +637,7 @@ function CommentNode({ c, post, children, depth, onChange }) {
         ${!collapsed && c.author.id === state.me.id && c.status === 'applied' && html`<div class="c-actions">
           <button class="link-quiet" onClick=${withdraw}>Dra tillbaka ansökan</button></div>`}
         ${replying && html`<form class="reply-form" onSubmit=${reply}>
-          <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder=${`Svara ${asGroup ? c.group.name : c.author.name}…`} aria-label="Svar" autofocus />
+          <${MentionField} as="input" value=${text} onChange=${setText} placeholder=${`Svara ${asGroup ? c.group.name : c.author.name}…`} aria-label="Svar" autofocus />
           <button class="link strong" disabled=${!text.trim() || busy}>Skicka</button></form>`}
       </div>
     </div>
@@ -648,7 +648,7 @@ function CommentNode({ c, post, children, depth, onChange }) {
 export function PostGrid({ posts, showAuthor = false, empty = 'Inga inlägg än.' }) {
   if (!posts.length) return html`<p class="empty">${empty}</p>`;
   return html`<div class="grid">${posts.map((p) => html`<a class="tile" href=${'#/post/' + p.id} key=${p.id}>
-    ${p.slides[0] ? html`<img src=${p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${p.caption}</span>`}
+    ${p.slides[0] ? html`<img src=${p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${plainText(p.caption)}</span>`}
     ${p.slides.length > 1 && html`<span class="tile-icon"><${Icon} name="layers" size=${18} /></span>`}
     ${(p.is_event || p.finance || postType(p) === 'lokal') && html`<span class="tile-kind">${p.is_event ? 'Evenemang' : p.finance ? 'Finansiering' : 'Resurs'}</span>`}
     ${showAuthor && html`<span class="tile-author"><${Avatar} src=${p.author.avatar_url} name=${p.author.name} size=${20} /></span>`}
@@ -758,12 +758,70 @@ export function CropModal({ file, src, shape = 'circle', title = 'Placera bilden
   <//>`;
 }
 
-// Gör webbadresser (https://…, www.…) och "#/post/<id>" klickbara i all text.
-const LINK_RE = /(#\/post\/[0-9a-f-]{36}|https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"”]|www\.[^\s<]+[^\s<.,;:!?)\]'"”])/g;
+// Textfält där man kan nämna någon: skriv @ och början av ett namn, välj i listan.
+// I fältet står @Namn; det som sparas (value/onChange) är @[Namn](id), så att det blir en länk och personen får en notis.
+export function MentionField({ value, onChange, as = 'textarea', onKeyDown, ...rest }) {
+  const [st, setSt] = useState(() => toEditable(value));
+  const [q, setQ] = useState(null);       // { start, text } – det som skrivits efter @
+  const [hits, setHits] = useState([]);
+  const [active, setActive] = useState(0);
+  const ref = useRef();
+  useEffect(() => { if (fromEditable(st.text, st.mentions) !== (value ?? '')) setSt(toEditable(value)); }, [value]);
+  useEffect(() => {
+    if (!q) { setHits([]); return; }
+    let alive = true;
+    const t = setTimeout(() => api.listUsers(q.text).then((us) => { if (alive) { setHits(us.filter((u) => u.id !== state.me?.id).slice(0, 6)); setActive(0); } }, () => {}), 120);
+    return () => { alive = false; clearTimeout(t); };
+  }, [q?.text]);
+  function detect(text, caret) {
+    const before = text.slice(0, caret);
+    const i = before.lastIndexOf('@');
+    if (i < 0 || (i > 0 && !/[\s(]/.test(before[i - 1]))) return null;
+    const t = before.slice(i + 1);
+    if (t.includes('\n') || t.length > 30 || (t.match(/ /g) || []).length > 1) return null;
+    return { start: i, text: t };
+  }
+  function input(e) {
+    const text = e.target.value;
+    const mentions = st.mentions.filter((m) => text.includes('@' + m.name));
+    setSt({ text, mentions });
+    onChange(fromEditable(text, mentions));
+    setQ(detect(text, e.target.selectionStart ?? text.length));
+  }
+  function pick(u) {
+    const el = ref.current;
+    const caret = el?.selectionStart ?? st.text.length;
+    const text = st.text.slice(0, q.start) + '@' + u.name + ' ' + st.text.slice(caret);
+    const mentions = [...st.mentions.filter((m) => m.id !== u.id), { name: u.name, id: u.id }];
+    setSt({ text, mentions }); onChange(fromEditable(text, mentions)); setQ(null);
+    const pos = q.start + u.name.length + 2;
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(pos, pos); });
+  }
+  function key(e) {
+    if (q && hits.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => (a + 1) % hits.length); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => (a - 1 + hits.length) % hits.length); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(hits[active]); return; }
+      if (e.key === 'Escape') { setQ(null); return; }
+    }
+    onKeyDown?.(e);
+  }
+  const Tag = as;
+  return html`<div class="mention-field">
+    <${Tag} ref=${ref} value=${st.text} onInput=${input} onKeyDown=${key} onBlur=${() => setTimeout(() => setQ(null), 150)} ...${rest} />
+    ${q && hits.length > 0 && html`<div class="ta-list mention-list" role="listbox">${hits.map((u, i) => html`<button type="button" role="option" key=${u.id}
+      class=${'ta-item' + (i === active ? ' on' : '')} onPointerDown=${(e) => e.preventDefault()} onClick=${() => pick(u)}>
+      <${Avatar} src=${u.avatar_url} name=${u.name} size=${24} /><span>${u.name}</span></button>`)}</div>`}
+  </div>`;
+}
+
+// Gör webbadresser (https://…, www.…), omnämnanden (@Namn) och "#/post/<id>" klickbara i all text.
+const LINK_RE = /(@\[[^\]\n]{1,80}\]\([0-9a-f-]{36}\)|#\/post\/[0-9a-f-]{36}|https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"”]|www\.[^\s<]+[^\s<.,;:!?)\]'"”])/g;
 export function linkify(text) {
   if (!text) return text;
   return String(text).split(LINK_RE).map((part, i) => {
     if (i % 2 === 0) return part;
+    if (part.startsWith('@[')) { const m = part.match(/^@\[(.+)\]\(([0-9a-f-]{36})\)$/); return html`<a class="mention" href=${'#/profil/' + m[2]} onClick=${(e) => e.stopPropagation()}>@${m[1]}</a>`; }
     if (part.startsWith('#/post/')) return html`<a class="msg-link" href=${part}>Visa inlägget</a>`;
     const url = part.startsWith('www.') ? 'https://' + part : part;
     return html`<a class="auto-link" href=${url} target="_blank" rel="noopener noreferrer" onClick=${(e) => e.stopPropagation()}>${part.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>`;

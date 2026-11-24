@@ -176,6 +176,21 @@ export const fmtKr = (n) => new Intl.NumberFormat('sv-SE').format(Math.round(Num
 export const fmtDate = (iso) => new Date(iso).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long' });
 export const fmtDateTime = (iso) => new Date(iso).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
+// Omnämnanden (@Namn) sparas i texten som @[Namn](användarens id) och visas som @Namn med länk till profilen.
+export const MENTION_RE = /@\[([^\]\n]{1,80})\]\(([0-9a-f-]{36})\)/g;
+export const plainText = (t) => String(t ?? '').replace(MENTION_RE, '@$1');
+// Redigerbar form: @Namn i texten och en lista över vilka namn som är omnämnanden.
+export function toEditable(raw) {
+  const mentions = [];
+  const text = String(raw ?? '').replace(MENTION_RE, (_, name, id) => { if (!mentions.some((m) => m.id === id)) mentions.push({ name, id }); return '@' + name; });
+  return { text, mentions };
+}
+export function fromEditable(text, mentions) {
+  let out = text;
+  for (const m of [...mentions].sort((a, b) => b.name.length - a.name.length)) out = out.split('@' + m.name).join(`@[${m.name}](${m.id})`);
+  return out;
+}
+
 export function timeAgo(iso) {
   const s = (Date.now() - new Date(iso)) / 1000;
   if (s < 60) return 'nyss';
@@ -302,7 +317,7 @@ export const eventColumns = (ev) => ev ? {
 } : { is_event: false, event_start: null, event_end: null, event_address: null, event_postcode: null, event_city: null,
   event_region: null, event_country: null, event_lat: null, event_lng: null, event_rsvp: true };
 
-export const eventTitle = (p) => (p.caption || '').split(/\n|(?<=[.!?])\s/)[0].slice(0, 80) || 'Evenemang';
+export const eventTitle = (p) => plainText(p.caption || '').split(/\n|(?<=[.!?])\s/)[0].slice(0, 80) || 'Evenemang';
 export const fmtEventTime = (p) => {
   const s = new Date(p.event_start), e = p.event_end ? new Date(p.event_end) : null;
   const day = s.toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -319,7 +334,7 @@ export function eventIcs(p, url) {
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Omställningsplatser//SV', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
     `UID:${p.id}@kooperativsystemet`, `SEQUENCE:${Math.floor(new Date(p.updated_at || p.created_at).getTime() / 1000) % 2147483647}`,
     `DTSTAMP:${z(new Date())}`, `DTSTART:${z(p.event_start)}`, `DTEND:${z(end)}`, `SUMMARY:${esc(eventTitle(p))}`,
-    `LOCATION:${esc([p.event_address, p.event_city].filter(Boolean).join(', '))}`, `DESCRIPTION:${esc(p.caption + '\n\n' + url)}`, `URL:${url}`,
+    `LOCATION:${esc([p.event_address, p.event_city].filter(Boolean).join(', '))}`, `DESCRIPTION:${esc(plainText(p.caption) + '\n\n' + url)}`, `URL:${url}`,
     'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
 }
 export function googleCalendarUrl(p, url) {
