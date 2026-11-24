@@ -468,7 +468,7 @@ export function ThemePicker({ onPick, onClose, title = 'Spara i Minne', hint = '
 }
 
 // Vem som skrivit inlägget. Personen är avsändaren – gruppen visas som en liten bild på personens bild och
-// "i Gruppnamn" under namnet: inlägget hör till gruppen, men personen talar inte för den.
+// "om Gruppnamn" under namnet: inlägget hör till gruppen, men personen talar inte för den.
 // Har en admin valt att publicera som gruppen är det tvärtom: gruppen är avsändaren och "via Namn" står under.
 // Inlägg som bara vissa grupper ser får en liten markering.
 const limited = (p) => p.visible_to?.length > 0 && html`<span class="limited" title="Syns bara för medlemmar i de grupper som valts">Bara för ${p.visible_to.length === 1 ? 'en grupp' : p.visible_to.length + ' grupper'}</span>`;
