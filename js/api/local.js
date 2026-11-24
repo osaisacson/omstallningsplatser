@@ -37,6 +37,9 @@ db.commentLikes ??= [];
 db.chats ??= [];
 db.chatMembers ??= [];
 db.chatMessages ??= [];
+// Redaktionen (den låsta gruppen) och dess medlemmar är alltid verifierade.
+for (const g of db.groups) if (g.locked && !g.verified_at) g.verified_at = new Date().toISOString();
+for (const m of db.members) if (db.groups.find((g) => g.id === m.group_id)?.locked) m.verified = true;
 function uuid0() { return crypto.randomUUID(); }
 
 const now = () => new Date().toISOString();
