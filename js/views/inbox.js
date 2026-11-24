@@ -1,7 +1,7 @@
 // Notiser, checklistan och meddelanden (enkla, utan lästkvitton eller andra beroendeskapande finesser).
 import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
-import { useStore, useAsync, go, goBack, attempt, refreshBadges } from '../store.js';
+import { useStore, useAsync, go, goBack, attempt, refreshBadges, toast, state } from '../store.js';
 import { Icon, Avatar, Header, UserRow, Loading, ErrorBox, linkify } from '../ui.js';
 import { fmtKr, timeAgo, plainText } from '../util.js';
 
@@ -122,6 +122,45 @@ const dayLabel = (iso) => {
 };
 const clock = (iso) => new Date(iso).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
 
+// Reaktioner på meddelanden: tryck på en bubbla för att välja en emoji (dubbeltryck ger ett hjärta).
+// Reaktionerna visas under bubblan; tryck på en för att lägga till eller ta bort din egen.
+const REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
+function Bubble({ kind, m, mine, tail }) {
+  const me = state.me?.id;
+  const [open, setOpen] = useState(false);
+  const [rs, setRs] = useState(m.reactions || []);
+  const wrap = useRef();
+  useEffect(() => setRs(m.reactions || []), [m.reactions]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (!wrap.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [open]);
+  async function toggle(emoji) {
+    const has = rs.some((r) => r.user_id === me && r.emoji === emoji);
+    const before = rs;
+    setRs(has ? rs.filter((r) => !(r.user_id === me && r.emoji === emoji)) : [...rs, { user_id: me, emoji }]);
+    setOpen(false);
+    try { await api.react(kind, m.id, emoji, !has); } catch (e) { setRs(before); toast(e.message); }
+  }
+  const groups = [];
+  for (const r of rs) {
+    let g = groups.find((x) => x.emoji === r.emoji);
+    if (!g) groups.push(g = { emoji: r.emoji, n: 0, mine: false });
+    g.n++; if (r.user_id === me) g.mine = true;
+  }
+  return html`<div class=${'bubble-row' + (mine ? ' mine' : '')}>
+    <div class="bubble-wrap" ref=${wrap}>
+      ${open && html`<div class="react-picker" role="menu" aria-label="Reagera">${REACTIONS.map((e) => html`<button type="button" role="menuitem"
+        class=${rs.some((r) => r.user_id === me && r.emoji === e) ? 'on' : ''} onClick=${() => toggle(e)} aria-label=${`Reagera med ${e}`}>${e}</button>`)}</div>`}
+      <div class=${'bubble' + (tail ? ' tail' : '')} title="Tryck för att reagera" onClick=${() => setOpen((o) => !o)} onDblClick=${(e) => { e.preventDefault(); toggle('❤️'); }}>${linkify(m.body)}</div>
+      ${groups.length > 0 && html`<div class="reactions">${groups.map((g) => html`<button type="button" key=${g.emoji} class=${'react-chip' + (g.mine ? ' on' : '')}
+        onClick=${() => toggle(g.emoji)} aria-label=${`${g.emoji} ${g.n}${g.mine ? ', du har reagerat' : ''}`}>${g.emoji}${g.n > 1 ? html`<span>${g.n}</span>` : ''}</button>`)}</div>`}
+    </div>
+  </div>`;
+}
+
 export function Inbox() {
   const s = useStore();
   const c = useAsync(() => api.listConversations(), []);
@@ -190,9 +229,7 @@ export function Thread({ userId }) {
         const lastInRun = !next || next.from_id !== m.from_id || new Date(next.created_at) - new Date(m.created_at) > 5 * 60e3;
         return html`<${'div'} key=${m.id}>
           ${newDay && html`<div class="day">${dayLabel(m.created_at)}</div>`}
-          <div class=${'bubble-row' + (mine ? ' mine' : '')}>
-            <div class=${'bubble' + (lastInRun ? ' tail' : '')}>${linkify(m.body)}</div>
-          </div>
+          <${Bubble} kind="dm" m=${m} mine=${mine} tail=${lastInRun} />
           ${lastInRun && html`<div class=${'stamp' + (mine ? ' mine' : '')}>${clock(m.created_at)}</div>`}
         <//>`;
       })}
@@ -303,9 +340,7 @@ export function ChatView({ chatId }) {
         return html`<${'div'} key=${m.id}>
           ${newDay && html`<div class="day">${dayLabel(m.created_at)}</div>`}
           ${!mine && firstInRun && html`<div class="bubble-name">${m.from?.name || 'Borttagen användare'}</div>`}
-          <div class=${'bubble-row' + (mine ? ' mine' : '')}>
-            <div class=${'bubble' + (lastInRun ? ' tail' : '')}>${linkify(m.body)}</div>
-          </div>
+          <${Bubble} kind="chat" m=${m} mine=${mine} tail=${lastInRun} />
           ${lastInRun && html`<div class=${'stamp' + (mine ? ' mine' : '')}>${clock(m.created_at)}</div>`}
         <//>`;
       })}

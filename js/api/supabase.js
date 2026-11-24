@@ -388,7 +388,7 @@ export const api = {
   },
   async getThread(userId) {
     const me = needMe();
-    const msgs = ok(await sb.from('messages').select('*')
+    const msgs = ok(await sb.from('messages').select('*, reactions:dm_reactions(user_id, emoji)')
       .or(`and(from_id.eq.${me},to_id.eq.${userId}),and(from_id.eq.${userId},to_id.eq.${me})`).order('created_at'));
     ok(await sb.from('messages').update({ read: true }).eq('to_id', me).eq('from_id', userId).eq('read', false));
     return msgs;
@@ -417,7 +417,7 @@ export const api = {
   async getChat(id) {
     const chat = ok(await sb.from('chats').select('*, group:groups(id,name,avatar_url), chat_members(user_id, muted, user:profiles!chat_members_user_id_fkey(' + PROFILE + '))').eq('id', id).maybeSingle());
     if (!chat) throw new Error('Samtalet finns inte, eller så är du inte med i det.');
-    const msgs = ok(await sb.from('chat_messages').select(`*, from:profiles!chat_messages_from_id_fkey(${PROFILE})`).eq('chat_id', id).order('created_at').limit(500));
+    const msgs = ok(await sb.from('chat_messages').select(`*, from:profiles!chat_messages_from_id_fkey(${PROFILE}), reactions:chat_reactions(user_id, emoji)`).eq('chat_id', id).order('created_at').limit(500));
     sb.rpc('mark_chat_read', { p_chat: id }).then(() => {}, () => {});
     const { chat_members: cm = [], ...c } = chat;
     return { ...c, members: cm.map((m) => m.user).filter(Boolean), muted: !!cm.find((m) => m.user_id === meId)?.muted, messages: msgs };
@@ -425,6 +425,12 @@ export const api = {
   async sendChatMessage(id, body) {
     if (!body?.trim()) throw new Error('Skriv något först.');
     ok(await sb.from('chat_messages').insert({ chat_id: id, from_id: needMe(), body: body.trim() }));
+  },
+  // Reagera med en emoji på ett meddelande (kind 'dm' = två personer, 'chat' = samtal med flera eller en grupp).
+  async react(kind, messageId, emoji, on) {
+    const table = kind === 'chat' ? 'chat_reactions' : 'dm_reactions';
+    if (on) ok(await sb.from(table).upsert({ message_id: messageId, user_id: needMe(), emoji }, { onConflict: 'message_id,user_id,emoji', ignoreDuplicates: true }));
+    else ok(await sb.from(table).delete().eq('message_id', messageId).eq('user_id', needMe()).eq('emoji', emoji));
   },
   async createChat(title, userIds) { return ok(await sb.rpc('create_chat', { p_title: title || null, p_users: userIds })); },
   async groupChat(groupId) { return ok(await sb.rpc('group_chat', { p_group: groupId })); },

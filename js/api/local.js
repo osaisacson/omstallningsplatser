@@ -37,6 +37,8 @@ db.commentLikes ??= [];
 db.chats ??= [];
 db.chatMembers ??= [];
 db.chatMessages ??= [];
+db.dmReactions ??= [];
+db.chatReactions ??= [];
 // Redaktionen (den låsta gruppen) och dess medlemmar är alltid verifierade.
 for (const g of db.groups) if (g.locked && !g.verified_at) g.verified_at = new Date().toISOString();
 for (const m of db.members) if (db.groups.find((g) => g.id === m.group_id)?.locked) m.verified = true;
@@ -624,7 +626,7 @@ export const api = {
     const msgs = db.messages.filter((m) => (m.from_id === me && m.to_id === userId) || (m.from_id === userId && m.to_id === me));
     for (const m of msgs) if (m.to_id === me) m.read = true;
     persist();
-    return clone(msgs.sort((a, b) => a.created_at.localeCompare(b.created_at)));
+    return clone(msgs.sort((a, b) => a.created_at.localeCompare(b.created_at)).map((m) => ({ ...m, reactions: db.dmReactions.filter((r) => r.message_id === m.id).map(({ user_id, emoji }) => ({ user_id, emoji })) })));
   },
   async sendMessage(userId, body) {
     const me = needMe();
@@ -679,7 +681,7 @@ export const api = {
     chatRow(id, me).last_read_at = now(); persist();
     const members = c.group_id ? db.members.filter((m) => m.group_id === c.group_id).map((m) => profileOf(m.user_id)) : db.chatMembers.filter((m) => m.chat_id === id).map((m) => profileOf(m.user_id));
     return clone({ ...c, group: c.group_id ? groupOf(c.group_id) : null, members, muted: !!chatRow(id, me).muted,
-      messages: db.chatMessages.filter((m) => m.chat_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((m) => ({ ...m, from: profileOf(m.from_id) })) });
+      messages: db.chatMessages.filter((m) => m.chat_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((m) => ({ ...m, from: profileOf(m.from_id), reactions: db.chatReactions.filter((r) => r.message_id === m.id).map(({ user_id, emoji }) => ({ user_id, emoji })) })) });
   },
   async sendChatMessage(id, body) {
     const me = needMe();
@@ -689,6 +691,13 @@ export const api = {
     const t = now();
     db.chatMessages.push({ id: uuid(), chat_id: id, from_id: me, body: body.trim(), created_at: t });
     c.last_message_at = t; chatRow(id, me).last_read_at = t;
+    persist();
+  },
+  async react(kind, messageId, emoji, on) {
+    const me = needMe();
+    const key = kind === 'chat' ? 'chatReactions' : 'dmReactions';
+    db[key] = db[key].filter((r) => !(r.message_id === messageId && r.user_id === me && r.emoji === emoji));
+    if (on) db[key].push({ message_id: messageId, user_id: me, emoji, created_at: now() });
     persist();
   },
   async createChat(title, userIds) {
