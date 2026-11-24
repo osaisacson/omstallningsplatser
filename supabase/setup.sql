@@ -1746,3 +1746,6 @@ drop policy if exists "reagera själv" on public.chat_reactions;
 create policy "reagera själv" on public.chat_reactions for insert to authenticated with check (user_id = auth.uid() and public.sees_chat_message(message_id));
 drop policy if exists "ta bort egen reaktion" on public.chat_reactions;
 create policy "ta bort egen reaktion" on public.chat_reactions for delete to authenticated using (user_id = auth.uid());
+
+-- 039: Hur långt ut ett inlägg når.
+alter table public.posts add column if not exists reach text check (reach is null or reach in ('district', 'city', 'region', 'country'));
