@@ -357,12 +357,13 @@ export const api = {
     db.members = db.members.filter((m) => !(m.group_id === gid && m.user_id === uid));
     ensureAdmin(gid); persist();
   },
-  async saveHighlight(gid, { id, title, post_ids }) {
+  async saveHighlight(gid, { id, title, description, post_ids }) {
     needMember(gid);
-    if (!title?.trim()) throw new Error('Ge höjdpunkten ett namn.');
+    if (!title?.trim()) throw new Error('Ge projektet ett namn.');
+    const desc = (description || '').trim() || null;
     const h = id && db.highlights.find((x) => x.id === id);
-    if (h) { h.title = title.trim(); h.post_ids = post_ids; }
-    else db.highlights.push({ id: uuid(), group_id: gid, title: title.trim(), post_ids, created_at: now() });
+    if (h) { h.title = title.trim(); h.description = desc; h.post_ids = post_ids; }
+    else db.highlights.push({ id: uuid(), group_id: gid, title: title.trim(), description: desc, post_ids, created_at: now() });
     persist();
   },
   async deleteHighlight(id) {

@@ -238,10 +238,11 @@ export const api = {
   async setMemberRole(gid, uid, role) { ok(await sb.from('group_members').update({ role }).eq('group_id', gid).eq('user_id', uid)); },
   async addMember(gid, uid) { ok(await sb.rpc('add_member', { p_group: gid, p_user: uid })); },
   async removeMember(gid, uid) { ok(await sb.from('group_members').delete().eq('group_id', gid).eq('user_id', uid)); },
-  async saveHighlight(gid, { id, title, post_ids }) {
-    if (!title?.trim()) throw new Error('Ge höjdpunkten ett namn.');
-    if (id) ok(await sb.from('highlights').update({ title: title.trim(), post_ids }).eq('id', id));
-    else ok(await sb.from('highlights').insert({ group_id: gid, title: title.trim(), post_ids }));
+  async saveHighlight(gid, { id, title, description, post_ids }) {
+    if (!title?.trim()) throw new Error('Ge projektet ett namn.');
+    const row = { title: title.trim(), description: (description || '').trim() || null, post_ids };
+    if (id) ok(await sb.from('highlights').update(row).eq('id', id));
+    else ok(await sb.from('highlights').insert({ group_id: gid, ...row }));
   },
   async deleteHighlight(id) { ok(await sb.from('highlights').delete().eq('id', id)); },
 

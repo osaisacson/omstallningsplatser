@@ -1,4 +1,4 @@
-// Gruppsida, höjdpunkter, gruppinställningar, ny grupp och välkomststeget.
+// Gruppsida, projekt, gruppinställningar, ny grupp och välkomststeget.
 import { html, useState } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshMe, toast } from '../store.js';
@@ -72,7 +72,7 @@ export function GroupView({ id }) {
       <div class="stats">
         <div><b>${list.length}</b><span>inlägg</span></div>
         <div><b>${grp.members.length}</b><span>medlemmar</span></div>
-        <div><b>${grp.highlights.length}</b><span>höjdpunkter</span></div>
+        <div><b>${grp.highlights.length}</b><span>projekt</span></div>
       </div>
     </div>
     <div class="profile-info"><strong>${grp.name}</strong>${placeText(grp) && html`<span class="group-place">${placeText(grp)}</span>`}${grp.description && html`<p>${linkify(grp.description)}</p>`}
@@ -101,9 +101,9 @@ export function GroupView({ id }) {
         <span>${m.user.name.split(' ')[0]}${m.verified && html`<${VerifiedBadge} title="Verifierad medlem" />`}</span></a>`)}
     </div>`}
 
-    ${(member || grp.highlights.length > 0) && html`<div class="label pad-x">Höjdpunkter</div>
+    ${(member || grp.highlights.length > 0) && html`<div class="label pad-x">Projekt</div>
     <div class="row-scroll highlights">
-      ${member && html`<button class="mini" onClick=${() => setHl({ highlight: { title: '', post_ids: [] }, edit: true })}>
+      ${member && html`<button class="mini" onClick=${() => setHl({ highlight: { title: '', description: '', post_ids: [] }, edit: true })}>
         <span class="hl-cover new">+</span><span>Ny</span></button>`}
       ${grp.highlights.map((h) => html`<button class="mini" key=${h.id} onClick=${() => setHl({ highlight: h, edit: false })}>
         <span class="hl-cover">${cover(h) ? html`<img src=${cover(h)} alt="" loading="lazy" decoding="async" />` : h.title[0]}</span><span>${h.title}</span></button>`)}
@@ -115,8 +115,9 @@ export function GroupView({ id }) {
     ${reporting && html`<${ReportForm} kind="group" id=${id} name=${grp.name} onClose=${() => setReporting(false)} />`}
 
     ${hl && !hl.edit && html`<${Modal} title=${hl.highlight.title} onClose=${() => setHl(null)}>
-      <${PostGrid} posts=${list.filter((p) => hl.highlight.post_ids.includes(p.id))} showAuthor empty="Inga inlägg i den här höjdpunkten än." />
-      ${member && html`<button class="btn block" onClick=${() => setHl({ ...hl, edit: true })}>Redigera höjdpunkten</button>`}
+      ${hl.highlight.description && html`<p class="project-desc">${linkify(hl.highlight.description)}</p>`}
+      <${PostGrid} posts=${list.filter((p) => hl.highlight.post_ids.includes(p.id))} showAuthor empty="Inga inlägg i projektet än." />
+      ${member && html`<button class="btn block" onClick=${() => setHl({ ...hl, edit: true })}>Redigera projektet</button>`}
     <//>`}
     ${hl && hl.edit && html`<${HighlightEditor} groupId=${id} highlight=${hl.highlight} posts=${list}
       onClose=${() => setHl(null)} onSaved=${() => { setHl(null); reload(); }} />`}
@@ -125,26 +126,29 @@ export function GroupView({ id }) {
 
 function HighlightEditor({ groupId, highlight, posts, onClose, onSaved }) {
   const [title, setTitle] = useState(highlight.title);
+  const [desc, setDesc] = useState(highlight.description || '');
   const [ids, setIds] = useState(highlight.post_ids);
   const toggle = (pid) => setIds((xs) => (xs.includes(pid) ? xs.filter((x) => x !== pid) : [...xs, pid]));
   async function save(e) {
     e.preventDefault();
-    if (await attempt(() => api.saveHighlight(groupId, { id: highlight.id, title, post_ids: ids }), 'Höjdpunkten sparades')) onSaved();
+    if (await attempt(() => api.saveHighlight(groupId, { id: highlight.id, title, description: desc, post_ids: ids }), 'Projektet sparades')) onSaved();
   }
   async function del() {
-    if (!confirm(`Ta bort höjdpunkten "${highlight.title}"? Inläggen finns kvar.`)) return;
+    if (!confirm(`Ta bort projektet "${highlight.title}"? Inläggen finns kvar.`)) return;
     if (await attempt(() => api.deleteHighlight(highlight.id))) onSaved();
   }
-  return html`<${Modal} title=${highlight.id ? 'Redigera höjdpunkt' : 'Ny höjdpunkt'} onClose=${onClose}>
+  return html`<${Modal} title=${highlight.id ? 'Redigera projekt' : 'Nytt projekt'} onClose=${onClose}>
     <form class="form" onSubmit=${save}>
-      <label>Namn<input required value=${title} onInput=${(e) => setTitle(e.target.value)} placeholder="t.ex. Bygget, Recept, Bidrag" /></label>
+      <label>Namn<input required value=${title} onInput=${(e) => setTitle(e.target.value)} placeholder="t.ex. Bygget, Odlingen, Solcellerna" /></label>
+      <label>Beskrivning <small class="muted">(valfritt – länkar blir klickbara)</small><textarea rows="4" value=${desc} onInput=${(e) => setDesc(e.target.value)}
+        placeholder="Vad handlar projektet om, hur långt har ni kommit? Klistra gärna in en länk, t.ex. https://…"></textarea></label>
       <div class="label small">Välj inlägg (${ids.length} valda)</div>
       ${posts.length === 0 ? html`<p class="muted">Gruppen har inga inlägg än.</p>` : html`<div class="grid pick">
         ${posts.map((p) => html`<button type="button" key=${p.id} class=${'tile' + (ids.includes(p.id) ? ' picked' : '')} onClick=${() => toggle(p.id)}>
           ${p.slides[0] ? html`<img src=${p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${plainText(p.caption)}</span>`}
           ${ids.includes(p.id) && html`<span class="tick">${ids.indexOf(p.id) + 1}</span>`}</button>`)}</div>`}
       <button class="btn primary block">Spara</button>
-      ${highlight.id && html`<button type="button" class="link danger center" onClick=${del}>Ta bort höjdpunkten</button>`}
+      ${highlight.id && html`<button type="button" class="link danger center" onClick=${del}>Ta bort projektet</button>`}
     </form><//>`;
 }
 
@@ -220,11 +224,11 @@ export function GroupSettings({ id }) {
     </div>`}
     <div class="pad danger-zone">
       <button class="btn danger block" onClick=${async () => {
-        if (!confirm(`Ta bort ${grp.name}? Gruppens alla inlägg, kommentarer och höjdpunkter tas också bort. Det går inte att ångra.`)) return;
+        if (!confirm(`Ta bort ${grp.name}? Gruppens alla inlägg, kommentarer och projekt tas också bort. Det går inte att ångra.`)) return;
         if (await attempt(() => api.deleteGroup(id), 'Gruppen togs bort')) { await refreshMe(); go('/'); }
       }}>Ta bort gruppen</button>
     </div>
-    <p class="hint pad">Den som skapar en grupp blir admin. Admins kan ändra namn, beskrivning och bild, lägga till och ta bort medlemmar, utse fler admins och publicera inlägg som gruppen. Alla medlemmar kan skapa och redigera gruppens höjdpunkter.
+    <p class="hint pad">Den som skapar en grupp blir admin. Admins kan ändra namn, beskrivning och bild, lägga till och ta bort medlemmar, utse fler admins och publicera inlägg som gruppen. Alla medlemmar kan skapa och redigera gruppens projekt.
       Om sista admin lämnar blir den som varit med längst admin. Om ingen admin varit inloggad på ett år mejlas admins, och efter 30 dagar tar den medlem som varit med längst över.</p>
   </div>`;
 }

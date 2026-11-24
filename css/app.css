@@ -999,3 +999,4 @@ button.row { width: 100%; text-align: left; }
 .mention-list { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; background: var(--bg); box-shadow: 0 6px 20px rgba(0,0,0,.12); }
 .comment-form .mention-list, .reply-form .mention-list { top: auto; bottom: 100%; }
 .ta-item.on { background: var(--bg-soft); }
+.project-desc { margin: 0 0 14px; line-height: 1.5; white-space: pre-line; }
