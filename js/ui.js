@@ -109,6 +109,7 @@ export function Carousel({ slides, badge = null }) {
 
 // Video i ett inlägg: börjar spela när den syns på skärmen och pausar när man scrollar förbi.
 // Ljudet är avstängt från början. Slår man på (eller av) det med knappen gäller valet alla videor, och sparas till nästa gång.
+let playing = null;   // bara en video spelar åt gången
 let soundOn = (() => { try { return localStorage.getItem('video-sound') === 'on'; } catch { return false; } })();
 const soundListeners = new Set();
 export function AutoVideo({ src, active = true, label }) {
@@ -121,8 +122,11 @@ export function AutoVideo({ src, active = true, label }) {
     if (!v) return;
     const io = new IntersectionObserver(([e]) => {
       // Webbläsaren kan vägra spela med ljud innan man rört sidan – då spelar videon tyst i stället.
-      if (e.isIntersecting && e.intersectionRatio >= 0.6 && active) v.play().catch(() => { v.muted = true; setMuted(true); v.play().catch(() => {}); });
-      else v.pause();
+      if (e.isIntersecting && e.intersectionRatio >= 0.6 && active) {
+        if (playing && playing !== v) playing.pause();
+        playing = v;
+        v.play().catch(() => { v.muted = true; setMuted(true); v.play().catch(() => {}); });
+      } else { v.pause(); if (playing === v) playing = null; }
     }, { threshold: [0, 0.6, 1] });
     io.observe(v);
     return () => io.disconnect();
@@ -135,7 +139,7 @@ export function AutoVideo({ src, active = true, label }) {
     if (soundOn) ref.current?.play().catch(() => {});
   };
   return html`<div class="video-wrap">
-    <video ref=${ref} src=${src} muted playsinline loop preload="metadata" aria-label=${label || 'Video'} onClick=${toggle}></video>
+    <video ref=${ref} src=${src} muted playsinline loop preload="none" aria-label=${label || 'Video'} onClick=${toggle}></video>
     <button class="video-sound" aria-label=${muted ? 'Slå på ljudet' : 'Stäng av ljudet'} onClick=${toggle}><${Icon} name=${muted ? 'volumeOff' : 'volumeOn'} size=${18} /></button>
   </div>`;
 }

@@ -47,6 +47,7 @@ async function uploadVideo(file) {
 // Märker vilka författare som är verifierade medlemmar i inläggets grupp.
 // Verifierad = verifierad medlem i inläggets grupp, eller med i Redaktionen (som alltid är verifierad).
 let editorIds = null;
+const readUpTo = new Map();   // samtal → senaste meddelandet vi markerat som läst
 async function markVerified(posts) {
   if (!posts.length) return posts;
   const gids = [...new Set(posts.map((p) => p.group_id).filter(Boolean))];
@@ -397,7 +398,8 @@ export const api = {
     const me = needMe();
     const msgs = ok(await sb.from('messages').select('*, reactions:dm_reactions(user_id, emoji)')
       .or(`and(from_id.eq.${me},to_id.eq.${userId}),and(from_id.eq.${userId},to_id.eq.${me})`).order('created_at'));
-    ok(await sb.from('messages').update({ read: true }).eq('to_id', me).eq('from_id', userId).eq('read', false));
+    // Markeras som lästa i bakgrunden, och bara om det finns något oläst – meddelandena visas direkt.
+    if (msgs.some((m) => m.to_id === me && !m.read)) sb.from('messages').update({ read: true }).eq('to_id', me).eq('from_id', userId).eq('read', false).then(() => {}, () => {});
     return msgs;
   },
   async sendMessage(userId, body) {
@@ -425,7 +427,8 @@ export const api = {
     const chat = ok(await sb.from('chats').select('*, group:groups(id,name,avatar_url), chat_members(user_id, muted, user:profiles!chat_members_user_id_fkey(' + PROFILE + '))').eq('id', id).maybeSingle());
     if (!chat) throw new Error('Samtalet finns inte, eller så är du inte med i det.');
     const msgs = ok(await sb.from('chat_messages').select(`*, from:profiles!chat_messages_from_id_fkey(${PROFILE}), reactions:chat_reactions(user_id, emoji)`).eq('chat_id', id).order('created_at').limit(500));
-    sb.rpc('mark_chat_read', { p_chat: id }).then(() => {}, () => {});
+    const lastAt = msgs.at(-1)?.created_at;
+    if (lastAt && lastAt !== readUpTo.get(id)) { readUpTo.set(id, lastAt); sb.rpc('mark_chat_read', { p_chat: id }).then(() => {}, () => {}); }
     const { chat_members: cm = [], ...c } = chat;
     return { ...c, members: cm.map((m) => m.user).filter(Boolean), muted: !!cm.find((m) => m.user_id === meId)?.muted, messages: msgs };
   },

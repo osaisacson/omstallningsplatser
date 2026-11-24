@@ -86,6 +86,7 @@ function useFitText(text) {
     const el = ref.current;
     const bar = el?.closest('.topbar');
     if (!el || !bar) return;
+    let last = '';
     const fit = () => {
       const place = el.closest('.placebar');
       const cs = getComputedStyle(bar);
@@ -94,6 +95,9 @@ function useFitText(text) {
       for (const c of bar.children) if (c !== place && getComputedStyle(c).display !== 'none') others += c.getBoundingClientRect().width + gap;
       for (const c of place.children) if (!c.contains(el)) others += c.getBoundingClientRect().width;
       const avail = Math.max(60, bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - others - 4);
+      const key = Math.round(avail) + '|' + text;
+      if (key === last) return;   // inget har ändrats – annars kan omräkningen trigga sig själv
+      last = key;
       let size = 16;
       Object.assign(el.style, { maxWidth: avail + 'px', fontSize: size + 'px', whiteSpace: 'nowrap' });
       if (el.scrollWidth <= avail) return;

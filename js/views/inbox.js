@@ -122,20 +122,25 @@ const dayLabel = (iso) => {
 };
 const clock = (iso) => new Date(iso).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
 
-// Reaktioner på meddelanden: tryck på en bubbla för hjärta eller tumme upp – eller + för fler (dubbeltryck ger ett hjärta).
+// Reaktioner på meddelanden: tryck på en bubbla för hjärta eller tumme upp – + öppnar telefonens emojitangentbord (dubbeltryck ger ett hjärta).
 // Reaktionerna visas under bubblan; tryck på en för att lägga till eller ta bort din egen.
 const QUICK = ['❤️', '👍'];
-const MORE = ['😂', '😮', '😢', '🙏', '🙌', '👏', '🔥', '🎉', '💚', '🌱', '🌍', '☀️', '🌻', '🍅', '🐝', '💪', '🤝', '👀', '🤔', '😅', '😍', '🥰', '😊', '🙂', '😎', '😴', '🤗', '🥳', '✅', '❗', '❓', '💡', '📅', '🏡', '🛠️', '🚲'];
+// Första emojin i det man skrivit (telefonens emojitangentbord), annars null.
+function firstEmoji(text) {
+  const parts = typeof Intl !== 'undefined' && Intl.Segmenter ? [...new Intl.Segmenter('sv', { granularity: 'grapheme' }).segment(text)].map((x) => x.segment) : [...text];
+  return parts.find((g) => /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(g)) || null;
+}
 function Bubble({ kind, m, mine, tail }) {
   const me = state.me?.id;
   const [open, setOpen] = useState(false);
-  const [all, setAll] = useState(false);   // + visar fler emojis
+  const [typing, setTyping] = useState(false);   // + öppnar telefonens tangentbord för valfri emoji
   const [rs, setRs] = useState(m.reactions || []);
   const wrap = useRef();
+  const emojiInput = useRef();   // fokuseras direkt i trycket, annars öppnar iPhone inte tangentbordet
   useEffect(() => setRs(m.reactions || []), [m.reactions]);
   useEffect(() => {
     if (!open) return;
-    const close = (e) => { if (!wrap.current?.contains(e.target)) { setOpen(false); setAll(false); } };
+    const close = (e) => { if (!wrap.current?.contains(e.target)) { setOpen(false); setTyping(false); } };
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
   }, [open]);
@@ -143,7 +148,7 @@ function Bubble({ kind, m, mine, tail }) {
     const has = rs.some((r) => r.user_id === me && r.emoji === emoji);
     const before = rs;
     setRs(has ? rs.filter((r) => !(r.user_id === me && r.emoji === emoji)) : [...rs, { user_id: me, emoji }]);
-    setOpen(false); setAll(false);
+    setOpen(false); setTyping(false);
     try { await api.react(kind, m.id, emoji, !has); } catch (e) { setRs(before); toast(e.message); }
   }
   const groups = [];
@@ -154,21 +159,30 @@ function Bubble({ kind, m, mine, tail }) {
   }
   return html`<div class=${'bubble-row' + (mine ? ' mine' : '')}>
     <div class="bubble-wrap" ref=${wrap}>
-      ${open && html`<div class=${'react-picker' + (all ? ' all' : '')} role="menu" aria-label="Reagera">
-        ${(all ? [...QUICK, ...MORE] : QUICK).map((e) => html`<button type="button" role="menuitem" key=${e}
+      ${open && html`<div class="react-picker" role="menu" aria-label="Reagera">
+        ${QUICK.map((e) => html`<button type="button" role="menuitem" key=${e}
           class=${rs.some((r) => r.user_id === me && r.emoji === e) ? 'on' : ''} onClick=${() => toggle(e)} aria-label=${`Reagera med ${e}`}>${e}</button>`)}
-        ${!all && html`<button type="button" class="react-more" aria-label="Fler emojis" onClick=${() => setAll(true)}>+</button>`}</div>`}
-      <div class=${'bubble' + (tail ? ' tail' : '')} title="Tryck för att reagera" onClick=${() => setOpen((o) => !o)} onDblClick=${(e) => { e.preventDefault(); toggle('❤️'); }}>${linkify(m.body)}</div>
+        <input ref=${emojiInput} class=${'react-input' + (typing ? '' : ' hidden')} enterkeyhint="done" aria-label="Välj en emoji med tangentbordet" placeholder="🙂"
+          onInput=${(e) => { const em = firstEmoji(e.target.value); if (em) toggle(em); else e.target.value = ''; }} />
+        ${!typing && html`<button type="button" class="react-more" aria-label="Annan emoji" title="Annan emoji – öppnar tangentbordet"
+          onClick=${() => { setTyping(true); emojiInput.current?.focus(); }}>+</button>`}
+      </div>`}
+      <div class=${'bubble' + (tail ? ' tail' : '') + (m.pending ? ' pending' : '')} title="Tryck för att reagera" onClick=${() => !m.pending && setOpen((o) => !o)} onDblClick=${(e) => { e.preventDefault(); if (!m.pending) toggle('❤️'); }}>${linkify(m.body)}</div>
       ${groups.length > 0 && html`<div class="reactions">${groups.map((g) => html`<button type="button" key=${g.emoji} class=${'react-chip' + (g.mine ? ' on' : '')}
         onClick=${() => toggle(g.emoji)} aria-label=${`${g.emoji} ${g.n}${g.mine ? ', du har reagerat' : ''}`}>${g.emoji}${g.n > 1 ? html`<span>${g.n}</span>` : ''}</button>`)}</div>`}
     </div>
   </div>`;
 }
 
+let inboxCache = { c: null, ch: null };   // listan visas direkt nästa gång, och hämtas om i bakgrunden
 export function Inbox() {
   const s = useStore();
-  const c = useAsync(() => api.listConversations(), []);
-  const ch = useAsync(() => api.listChats(), []);
+  const c0 = useAsync(() => api.listConversations(), []);
+  const ch0 = useAsync(() => api.listChats(), []);
+  if (c0.data) inboxCache.c = c0.data;
+  if (ch0.data) inboxCache.ch = ch0.data;
+  const c = { ...c0, data: c0.data || inboxCache.c };
+  const ch = { ...ch0, data: ch0.data || inboxCache.ch };
   // Alla samtal i en lista, senaste först: två personer (som förut) och samtal med flera eller med en hel grupp.
   const rows = [
     ...(c.data || []).map((x) => ({ key: 'u' + x.user.id, at: x.last.created_at, href: '#/meddelanden/' + x.user.id, unread: x.unread, muted: false,
@@ -203,19 +217,21 @@ export function Thread({ userId }) {
   const t = useAsync(() => api.getThread(userId), [userId]);
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState([]);   // skickade men inte bekräftade – visas direkt
   const end = useRef();
-  const count = t.data?.length;
-  useEffect(() => { if (count != null) { refreshBadges(); end.current?.scrollIntoView({ block: 'end' }); } }, [count]);   // bara när det kommit något nytt
+  const count = (t.data?.length ?? 0) + pending.length;
+  useEffect(() => { if (count) { end.current?.scrollIntoView({ block: 'end' }); refreshBadges(); } }, [count]);   // bara när det kommit något nytt
   useEffect(() => { const i = setInterval(() => { if (!document.hidden) t.reload(); }, 15000); return () => clearInterval(i); }, [userId]); // hämtar nya meddelanden då och då
   async function send(e) {
     e?.preventDefault();
     if (!body.trim() || busy) return;
-    setBusy(true);
-    if (await attempt(() => api.sendMessage(userId, body))) { setBody(''); t.reload(); }
-    setBusy(false);
+    const text = body;
+    setBody(''); setPending((p) => [...p, { id: 'p' + Date.now(), from_id: s.me.id, to_id: userId, body: text, created_at: new Date().toISOString(), pending: true }]);
+    if (await attempt(() => api.sendMessage(userId, text))) await t.reload(); else setBody(text);
+    setPending([]);
   }
   const user = u.data;
-  const msgs = t.data || [];
+  const msgs = [...(t.data || []), ...pending];
   return html`<div class="page chat">
     <header class="topbar">
       <div class="topbar-side"><button class="iconbtn" aria-label="Tillbaka" onClick=${() => goBack('/meddelanden')}><${Icon} name="back" /></button></div>
@@ -301,18 +317,20 @@ export function ChatView({ chatId }) {
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [muted, setMuted] = useState(null);
+  const [pending, setPending] = useState([]);
   const end = useRef();
-  const count = t.data?.messages.length;
-  useEffect(() => { if (count != null) { refreshBadges(); end.current?.scrollIntoView({ block: 'end' }); } }, [count]);
+  const count = (t.data?.messages.length ?? 0) + pending.length;
+  useEffect(() => { if (count) { end.current?.scrollIntoView({ block: 'end' }); refreshBadges(); } }, [count]);
   useEffect(() => { const i = setInterval(() => { if (!document.hidden) t.reload(); }, 15000); return () => clearInterval(i); }, [chatId]);
   const chat = t.data;
   const isMuted = muted ?? chat?.muted ?? false;
   async function send(e) {
     e?.preventDefault();
     if (!body.trim() || busy) return;
-    setBusy(true);
-    if (await attempt(() => api.sendChatMessage(chatId, body))) { setBody(''); t.reload(); }
-    setBusy(false);
+    const text = body;
+    setBody(''); setPending((p) => [...p, { id: 'p' + Date.now(), from_id: s.me.id, body: text, created_at: new Date().toISOString(), pending: true }]);
+    if (await attempt(() => api.sendChatMessage(chatId, text))) await t.reload(); else setBody(text);
+    setPending([]);
   }
   async function toggleMute() {
     const next = !isMuted;
@@ -321,7 +339,7 @@ export function ChatView({ chatId }) {
     refreshBadges();
   }
   const title = chat ? (chat.group ? chat.group.name : chat.title || chat.members.filter((m) => m.id !== s.me.id).map((m) => m.name.split(' ')[0]).join(', ')) : '';
-  const msgs = chat?.messages || [];
+  const msgs = [...(chat?.messages || []), ...pending];
   return html`<div class="page chat">
     <header class="topbar">
       <div class="topbar-side"><button class="iconbtn" aria-label="Tillbaka" onClick=${() => goBack('/meddelanden')}><${Icon} name="back" /></button></div>
