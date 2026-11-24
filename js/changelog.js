@@ -2,6 +2,7 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-24T07:45', 'Inlägg visar vilken grupp de handlar om: ”om Sjöbergen” i stället för ”i Sjöbergen”.'],
   ['2026-11-23T11:08', 'När du postar väljer du bland dina grupper – eller söker upp en annan och går med direkt.'],
   ['2026-11-23T11:08', 'Välj vem som ser inlägget: alla, eller bara vissa grupper. Det går att ändra efteråt.'],
   ['2026-11-23T10:40', 'Profil och inställningar och Logga ut finns under ··· på din profil.'],

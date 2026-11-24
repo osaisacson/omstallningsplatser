@@ -482,7 +482,7 @@ export function PostHead({ post: p, children }) {
     <a class="head-avatar" href=${'#/profil/' + a.id}><${Avatar} src=${a.avatar_url} name=${a.name} size=${36} />
       ${g && html`<span class="head-group" title=${g.name}><${Avatar} src=${g.avatar_url} name=${g.name} size=${18} /></span>`}</a>
     <div class="who"><a class="strong" href=${'#/profil/' + a.id}>${a.name}</a>
-      ${g && html`<a class="by" href=${'#/grupp/' + g.id}>i <b>${g.name}</b></a>`}${limited(p)}</div>
+      ${g && html`<a class="by" href=${'#/grupp/' + g.id}>om <b>${g.name}</b></a>`}${limited(p)}</div>
     ${children}</div>`;
 }
 
