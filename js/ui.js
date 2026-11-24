@@ -567,7 +567,7 @@ export function PostCard({ post: p, onChange, full = false }) {
       ${p.slides.length > 0 && p.caption && html`<p class="caption">${linkify(p.caption)}</p>`}
       ${kind === 'lokal' && html`<p class="space-info">${(p.space_functions || []).join(' · ')}
         <span class="space-cost">${SPACE_COSTS[p.space_cost] || ''}${p.space_cost === 'kostar' && p.space_price ? `: ${p.space_price}` : ''}</span></p>`}
-      ${kind === 'vanlig' && p.categories?.length > 0 && html`<p class="topics">${p.categories.map((c) => html`<span>#${c.toLowerCase()}</span>`)}</p>`}
+      ${kind === 'vanlig' && p.categories?.length > 0 && html`<p class="topics">${p.categories.map((c) => html`<a href=${'#/sok?flik=poster&tagg=' + encodeURIComponent(c.toLowerCase())} title=${`Visa inlägg med #${c.toLowerCase()}`}>#${c.toLowerCase()}</a>`)}</p>`}
       ${p.is_event && p.event_start && html`<${EventBox} post=${p} />`}
       ${p.finance && html`<${FinanceBox} post=${p} onApply=${() => setApplying(true)} />`}
       <div class="post-actions">

@@ -94,12 +94,16 @@ const SEARCH_TABS = [['grupper', 'Grupper'], ['folk', 'Folk'], ['poster', 'Poste
   ['lokaler', 'Resurser'], ['evenemang', 'Events'], ['minne', 'Minne']];
 const OLD_TABS = { inlagg: 'poster', personer: 'folk' };
 
-export function Search({ tab: initialTab }) {
+export function Search({ tab: initialTab, tags: initialTags }) {
   const s = useStore();
   const place = s.place || { level: 'world' };
   const [q, setQ] = useState('');
   const [dq, setDq] = useState('');
   const start = OLD_TABS[initialTab] || initialTab;
+  // Taggar att filtrera på (en tagg under ett inlägg leder hit). Fler kan läggas till; inlägg måste ha alla.
+  const [tags, setTags] = useState(() => (initialTags || '').split(',').map((t) => t.trim().replace(/^#/, '').toLowerCase()).filter(Boolean));
+  const [tagText, setTagText] = useState('');
+  const addTag = (raw) => { const t = raw.trim().replace(/^#+/, '').toLowerCase(); if (t && !tags.includes(t)) setTags([...tags, t]); setTagText(''); };
   const [tab, setTab] = useState(() => { try { return SEARCH_TABS.some(([k]) => k === start) ? start : sessionStorage.getItem('sok-flik') || 'grupper'; } catch { return 'grupper'; } });
   const choose = (k) => { setTab(k); try { sessionStorage.setItem('sok-flik', k); } catch { /* ok */ } };
   useEffect(() => { const t = setTimeout(() => setDq(q), 200); return () => clearTimeout(t); }, [q]);
@@ -112,7 +116,9 @@ export function Search({ tab: initialTab }) {
   const has = (...xs) => !needle || xs.some((x) => String(x || '').toLowerCase().includes(needle));
   const postText = (p) => [p.caption, p.author?.name, p.group?.name, ...(p.categories || []), ...(p.slides || []).map((x) => x.text),
     p.event_title, p.event_address, p.event_city, ...(p.space_functions || [])];
-  const postMatch = (p) => has(...postText(p));
+  const tagMatch = (p) => tags.every((t) => (p.categories || []).some((c) => c.toLowerCase() === t));
+  const postMatch = (p) => has(...postText(p)) && tagMatch(p);
+  const allTags = [...new Set((posts.data || []).flatMap((p) => (p.categories || []).map((c) => c.toLowerCase())))].sort((a, b) => a.localeCompare(b, 'sv'));
 
   const localGroups = (groups.data || []).filter((g) => inPlace(g, place));
   // Folk i ett område = de som är med i grupperna där (var man själv bor syns bara för en själv).
@@ -132,13 +138,21 @@ export function Search({ tab: initialTab }) {
   const items = lists[tab];
   const where = placeLabel(place);
   const what = { grupper: 'grupper', folk: 'personer', poster: 'poster', finansiering: 'finansiering', lokaler: 'resurser', evenemang: 'kommande evenemang', minne: 'sparat i minnet' }[tab];
-  const empty = html`<p class="empty">${needle ? `Inga ${what} i ${where} som matchar ”${dq.trim()}”.` : `Inga ${what} i ${where} än.`}
+  const filterWords = [needle && `”${dq.trim()}”`, ...tags.map((t) => '#' + t)].filter(Boolean).join(' och ');
+  const empty = html`<p class="empty">${filterWords ? `Inga ${what} i ${where} som matchar ${filterWords}.` : `Inga ${what} i ${where} än.`}
     ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> uppe till vänster för att söka i ${placeLabel(zoomOut(place))}.</span>`}</p>`;
 
   return html`<div class="page search-page">
     <header class="topbar brand"><${PlaceSwitcher} groups=${groups.data || []} /></header>
     <p class="search-hint">Välj område uppe till vänster – stadsdel, stad, region, land eller hela världen – och skriv för att hitta det du letar efter där.</p>
     <div class="searchbar"><input type="search" value=${q} onInput=${(e) => setQ(e.target.value)} placeholder=${`Sök i ${where}`} aria-label=${`Sök i ${where}`} /></div>
+    <div class="tag-filter">
+      ${tags.map((t) => html`<span class="chip on" key=${t}>#${t}<button type="button" aria-label=${`Ta bort #${t}`} onClick=${() => setTags(tags.filter((x) => x !== t))}>×</button></span>`)}
+      <input list="sok-taggar" value=${tagText} placeholder=${tags.length ? '+ fler taggar' : '+ filtrera på tagg'} aria-label="Lägg till en tagg att filtrera på"
+        onInput=${(e) => { const v = e.target.value; if (/[ ,]$/.test(v)) addTag(v.slice(0, -1)); else if (allTags.includes(v.toLowerCase().replace(/^#/, ''))) addTag(v); else setTagText(v); }}
+        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(e.target.value); } if (e.key === 'Backspace' && !e.target.value && tags.length) setTags(tags.slice(0, -1)); }} />
+      <datalist id="sok-taggar">${allTags.filter((t) => !tags.includes(t)).map((t) => html`<option value=${t} />`)}</datalist>
+    </div>
     <div class="filterbar search-tabs" role="tablist">${SEARCH_TABS.map(([k, label]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => choose(k)}>
       ${label}${(k === 'folk' ? users.data && groups.data : k === 'grupper' ? groups.data : k === 'evenemang' ? events.data : posts.data) ? html` <span class="tab-n">${lists[k].length}</span>` : ''}</button>`)}</div>
     ${loading.error ? html`<${ErrorBox} error=${loading.error} />` : (loading.loading && !loading.data) || (tab === 'folk' && !groups.data) ? html`<${Loading} />`

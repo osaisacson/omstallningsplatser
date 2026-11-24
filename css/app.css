@@ -1023,3 +1023,13 @@ button.row { width: 100%; text-align: left; }
 /* Alla emojis: en panel nertill på skärmen, så att den aldrig hamnar under rubriken */
 .react-picker.all { position: fixed; left: 12px; right: 12px; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 72px); top: auto;
   flex-wrap: wrap; justify-content: center; border-radius: 16px; max-height: 40vh; overflow-y: auto; z-index: 60; max-width: 480px; margin: 0 auto; }
+
+/* Taggar: klickbara under inlägg, filter i Sök */
+.topics a { color: var(--blue, #3b82f6); margin-right: 6px; }
+.tag-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 16px 8px; }
+.tag-filter .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+.tag-filter .chip button { width: 18px; height: 18px; border-radius: 50%; color: inherit; font-size: 14px; line-height: 1; }
+.tag-filter input { flex: 1; min-width: 120px; border: 0; background: transparent; padding: 4px 2px; font: inherit; font-size: 13.5px; outline: none; color: var(--text); }
+/* Gruppens medlemmar: rubrik först, låst grupp i grått; admin som text under namnet */
+.members-note { margin-left: 8px; font-weight: 400; font-size: 13px; color: var(--muted); }
+.member-role { font-size: 10.5px; color: var(--muted); margin-top: -2px; }

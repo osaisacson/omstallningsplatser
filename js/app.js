@@ -29,7 +29,7 @@ function route({ parts: [a, b, c], query }) {
     case undefined: return html`<${Home} />`;
     case 'hjalp': return html`<${Help} />`;
     case 'feedback': return b ? html`<${FeedbackView} id=${b} />` : html`<${Feedback} />`;
-    case 'sok': return html`<${Search} tab=${query.get('flik')} />`;
+    case 'sok': return html`<${Search} tab=${query.get('flik')} tags=${query.get('tagg')} />`;
     case 'minne': return html`<${Memory} theme=${b ? decodeURIComponent(b) : null} />`;
     case 'ny': return html`<${Compose} groupId=${query.get('grupp')} type=${query.get('typ')} />`;
     case 'notiser': return html`<${Notifications} />`;

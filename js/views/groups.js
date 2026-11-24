@@ -91,14 +91,14 @@ export function GroupView({ id }) {
     ${asking && html`<${AdminRequestForm} group=${grp} onClose=${() => setAsking(false)} onDone=${() => { setAsking(false); mine.reload(); }} />`}
     <div class="members-head">
       ${!member && !grp.locked && html`<button class="btn primary small" onClick=${join}>Gå med i gruppen</button>`}
-      ${grp.locked && html`<span class="muted small">Låst grupp – medlemmarna är <a href="#/hjalp">Redaktionen</a></span>`}
-      <span class="members-title">Medlemmar <span class="muted">(${grp.members.length})</span></span>
+      <span class="members-title">Medlemmar <span class="muted">(${grp.members.length})</span>${grp.locked && html` <a class="members-note" href="#/hjalp">Låst grupp</a>`}</span>
     </div>
     ${grp.members.length > 0 && html`<div class="row-scroll members-row">
       ${[...grp.members].sort((a, b) => (b.role === 'admin') - (a.role === 'admin')).map((m) => html`<a class="mini member" href=${'#/profil/' + m.user.id} key=${m.user.id}
         title=${m.role === 'admin' ? `${m.user.name} (admin)` : m.user.name}>
-        <span class="member-av"><${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${40} />${m.role === 'admin' && html`<span class="admin-badge" aria-label="admin">★</span>`}</span>
-        <span>${m.user.name.split(' ')[0]}${m.verified && html`<${VerifiedBadge} title="Verifierad medlem" />`}</span></a>`)}
+        <span class="member-av"><${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${40} /></span>
+        <span>${m.user.name.split(' ')[0]}${m.verified && html`<${VerifiedBadge} title="Verifierad medlem" />`}</span>
+        ${m.role === 'admin' && !grp.locked && html`<small class="member-role">admin</small>`}</a>`)}
     </div>`}
 
     ${(member || grp.highlights.length > 0) && html`<div class="label pad-x">Projekt</div>
