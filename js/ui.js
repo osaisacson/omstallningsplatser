@@ -694,20 +694,24 @@ export function ImagePicker({ current, name, onFile, label = 'Välj bild' }) {
   </div>`;
 }
 
-const CROP = 280;   // cirkelns storlek på skärmen
-function CropModal({ file, onCancel, onDone }) {
+const CROP = 280;   // beskärningsrutans storlek på skärmen
+// Beskär och zooma: dra för att flytta, nyp eller använd reglaget för att zooma.
+// shape 'circle' för profil- och gruppbilder, 'square' för bilder i inlägg (som visas kvadratiska i flödet).
+export function CropModal({ file, src, shape = 'circle', title = 'Placera bilden', size = 512, onCancel, onDone }) {
   const [img, setImg] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });   // bildens övre vänstra hörn i rutan
   const pointers = useRef(new Map());
   const pinch = useRef(null);
   useEffect(() => {
-    const url = URL.createObjectURL(file);
+    const url = file ? URL.createObjectURL(file) : src;
     const i = new Image();
+    if (!file) i.crossOrigin = 'anonymous';   // redan uppladdad bild: behövs för att kunna rita om den
     i.onload = () => setImg(i);
+    i.onerror = () => { toast('Bilden gick inte att öppna för beskärning.'); onCancel(); };
     i.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    return () => { if (file) URL.revokeObjectURL(url); };
+  }, [file, src]);
   const base = img ? Math.max(CROP / img.naturalWidth, CROP / img.naturalHeight) : 1;
   const scale = base * zoom;
   const w = img ? img.naturalWidth * scale : CROP, h = img ? img.naturalHeight * scale : CROP;
@@ -733,22 +737,22 @@ function CropModal({ file, onCancel, onDone }) {
   };
   const up = (e) => { pointers.current.delete(e.pointerId); if (pointers.current.size < 2) pinch.current = null; };
   async function done() {
-    const c = document.createElement('canvas'); c.width = c.height = 512;
+    const c = document.createElement('canvas'); c.width = c.height = size;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 512, 512);
-    ctx.drawImage(img, -pos.x / scale, -pos.y / scale, CROP / scale, CROP / scale, 0, 0, 512, 512);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(img, -pos.x / scale, -pos.y / scale, CROP / scale, CROP / scale, 0, 0, size, size);
     const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.88));
     onDone(new File([blob], 'bild.jpg', { type: 'image/jpeg' }));
   }
-  return html`<${Modal} title="Placera bilden" onClose=${onCancel}>
+  return html`<${Modal} title=${title} onClose=${onCancel}>
     <div class="crop" style=${{ width: CROP + 'px', height: CROP + 'px' }}
       onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}
       onWheel=${(e) => { e.preventDefault(); if (img) zoomTo(zoom * (e.deltaY < 0 ? 1.08 : 0.93)); }}>
       ${img ? html`<img src=${img.src} alt="" draggable="false" style=${{ width: w + 'px', height: h + 'px', transform: `translate(${pos.x}px, ${pos.y}px)` }} />` : html`<${Loading} />`}
-      <span class="crop-ring"></span>
+      <span class=${'crop-ring' + (shape === 'square' ? ' square' : '')}></span>
     </div>
     <label class="crop-zoom"><span>−</span><input type="range" min="1" max="4" step="0.01" value=${zoom} onInput=${(e) => img && zoomTo(Number(e.target.value))} aria-label="Zooma" /><span>+</span></label>
-    <p class="hint center">Dra i bilden för att flytta den.</p>
+    <p class="hint center">Dra för att flytta. Nyp eller dra i reglaget för att zooma.</p>
     <div class="btnrow crop-btns"><button type="button" class="btn" onClick=${onCancel}>Avbryt</button>
       <button type="button" class="btn primary" disabled=${!img} onClick=${done}>Använd</button></div>
   <//>`;

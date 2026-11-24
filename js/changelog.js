@@ -2,6 +2,7 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-24T21:51', 'Beskär och zooma bilder när du lägger upp dem: dra för att flytta, nyp eller använd reglaget för att zooma.'],
   ['2026-11-24T21:35', 'Gilla inlägg och kommentarer med ett hjärta.'],
   ['2026-11-24T21:35', 'Dela inlägg med en länk.'],
   ['2026-11-24T21:35', 'Lägg upp video – den spelas upp utan ljud när du scrollar förbi.'],

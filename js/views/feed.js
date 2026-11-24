@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshBadges, refreshMe, onRefresh } from '../store.js';
-import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker } from '../ui.js';
+import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal } from '../ui.js';
 import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
 
 import { InstallHint } from '../install.js';
@@ -332,6 +332,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   const [ev, setEv] = useState({ date: '', start: '', end: '', address: '', rsvp: true });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [cropping, setCropping] = useState(null);   // index för bilden som beskärs
 
   useEffect(() => {
     if (!editing) return;
@@ -368,6 +369,8 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
     const big = files.find((f) => f.type.startsWith('video/') && f.size > 50 * 1024 * 1024);
     if (big) setErr(`${big.name} är för stor – videor får vara högst 50 MB.`);
     setSlides((xs) => [...xs, ...files.filter((f) => f !== big).map((file) => ({ key: crypto.randomUUID(), file, media_type: file.type.startsWith('video/') ? 'video' : 'image', preview: URL.createObjectURL(file), text: '' }))]);
+    // En enda bild: beskärningen öppnas direkt (som på Instagram). Flera bilder beskärs en i taget med knappen.
+    if (files.length === 1 && files[0].type.startsWith('image/')) setCropping(slides.length);
     e.target.value = '';
   }
 
@@ -480,12 +483,17 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
           <div class="se-main">
             <textarea rows="3" placeholder=${`Text till ${sl.media_type === 'video' ? 'videon' : 'bild ' + (i + 1)} (valfritt)`} value=${sl.text} onInput=${(e) => update(i, { text: e.target.value })}></textarea>
             <div class="se-actions">
+              ${sl.media_type !== 'video' && html`<button type="button" class="link" onClick=${() => setCropping(i)}>Beskär och zooma</button>`}
               ${i > 0 && html`<button type="button" class="link" onClick=${() => move(i, -1)}>↑ Flytta upp</button>`}
               <button type="button" class="link danger" onClick=${() => remove(i)}>Ta bort</button>
             </div>
           </div></div>`)}
         <label class="addimg"><input type="file" accept="image/*,video/*" multiple hidden onChange=${addFiles} /><${Icon} name="image" />
           ${slides.length ? 'Lägg till fler bilder eller video' : 'Lägg till bilder eller video'}</label>
+        ${cropping != null && slides[cropping] && html`<${CropModal} shape="square" size=${1080} title="Beskär bilden"
+          file=${slides[cropping].file} src=${slides[cropping].file ? null : slides[cropping].image_url}
+          onCancel=${() => setCropping(null)}
+          onDone=${(file) => { update(cropping, { file, preview: URL.createObjectURL(file), media_type: 'image' }); setCropping(null); }} />`}
         <small class="muted">Videor får vara högst 50 MB och spelas upp utan ljud i flödet.</small>
       </section>
 

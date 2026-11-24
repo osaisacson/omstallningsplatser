@@ -989,3 +989,4 @@ button.row { width: 100%; text-align: left; }
 
 /* Rader som går i sidled (flikar, grupper, medlemmar): bara sidledes, utan att hela raden kan dras och studsa uppåt/neråt */
 .filterbar, .stories, .row-scroll { overflow-y: hidden; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+.crop-ring.square { border-radius: 0; }
