@@ -41,7 +41,6 @@ Deno.serve(async (req) => {
     if (!c) return new Response('ok');
     to = (c as any).post?.author_id; title = 'Ny ansökan om pengar';
     body = `${(c as any).group?.name || 'En grupp'} söker ${kr(c.applied_amount)}`; url = `./#/post/${c.post_id}`;
-  }
   } else if (type === 'chat_messages') {
     const { data: m } = await sb.from('chat_messages').select('chat_id, from_id, body, sender:profiles!chat_messages_from_id_fkey(name), chat:chats(title, group_id, group:groups(name))').eq('id', id).single();
     if (!m) return new Response('ok');
