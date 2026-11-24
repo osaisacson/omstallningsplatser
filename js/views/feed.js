@@ -3,7 +3,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshBadges, refreshMe, onRefresh } from '../store.js';
 import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal, MentionField } from '../ui.js';
-import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
+import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, postVisibleAt, regionName, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
 
 import { InstallHint } from '../install.js';
 import { CHANGES } from '../changelog.js';
@@ -130,7 +130,7 @@ export function Home({ tab: startTab }) {
   const place = s.place || { level: 'world' };
   const choose = (t) => { setTab(t); try { sessionStorage.setItem('tab', t); } catch {} };
 
-  const here = (posts.data || []).filter((p) => inPlace(postPlace(p), place));
+  const here = (posts.data || []).filter((p) => postVisibleAt(p, place));
   const finance = here.filter((p) => postType(p) === 'finansiering');
   const spaces = here.filter((p) => postType(p) === 'lokal');
   const available = finance.reduce((sum, p) => sum + (p.finance?.open ? p.finance.remaining : 0), 0);
@@ -315,6 +315,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   // Vem ser inlägget: alla (tom lista) eller bara medlemmar i valda grupper.
   const [visibleTo, setVisibleTo] = useState([]);
   const [limit, setLimit] = useState(false);
+  const [reach, setReach] = useState(null);   // hur långt ut inlägget når (null = där det hör hemma)
   const [joining, setJoining] = useState(false);
   // Plats för inlägg utan grupp (förifylld med ens egen plats).
   const [where, setWhere] = useState(() => (s.me.home ? { ...emptyHome(), ...s.me.home, district: null } : emptyHome()));
@@ -339,7 +340,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       if (p.author_id !== s.me.id) return go('/post/' + editId);
       setType(p.is_event ? 'evenemang' : postType(p));
       setSlides(p.slides.map((x) => ({ key: x.id, id: x.id, image_url: x.image_url, media_type: x.media_type || 'image', preview: x.image_url, text: x.text || '' })));
-      setCaption(p.caption || ''); setGroupId(p.group_id); setPersonal(!p.group_id); setAsGroup(!!p.as_group); setVisibleTo(p.visible_to || []); setLimit(!!p.visible_to?.length);
+      setCaption(p.caption || ''); setGroupId(p.group_id); setPersonal(!p.group_id); setAsGroup(!!p.as_group); setVisibleTo(p.visible_to || []); setLimit(!!p.visible_to?.length); setReach(p.reach || null);
       if (!p.group_id && p.country) setWhere({ ...emptyHome(), country: p.country, region: p.region || '', city: p.city || '', postcode: p.postcode || null });
       setTags(p.categories || []);
       setFunctions(p.space_functions || []); setCost(p.space_cost || 'gratis'); setPrice(p.space_price || '');
@@ -360,6 +361,20 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
 
   const noGroups = myGroups.length === 0;
   const isPersonal = personal || noGroups || !groupId;
+  // Räckvidd: från inläggets plats (gruppens, eller den man angett) och utåt. Första valet är där det hör hemma.
+  const homePl = isPersonal ? where : (placeGroups.data || []).find((g) => g.id === groupId) || myGroups.find((g) => g.id === groupId) || {};
+  const reachOptions = [
+    homePl.postcode && ['district', homePl.district || 'Stadsdelen'],
+    homePl.city && ['city', homePl.city],
+    homePl.region && ['region', regionName(homePl.region)],
+    homePl.country && ['country', homePl.country === 'Sverige' ? 'Hela Sverige' : homePl.country],
+  ].filter(Boolean);
+  if (!reachOptions.length) reachOptions.push(['city', 'Platsen']);
+  // Byter man grupp kan räckvidden sakna motsvarighet – då gäller grundvalet.
+  const reachNow = reachOptions.some(([l]) => l === reach) ? reach : null;
+  const reachLvl = reachNow || reachOptions[0][0];
+  const reachIn = { district: homePl.district ? `i ${homePl.district}` : 'i stadsdelen', city: `i ${homePl.city}`, region: `i ${regionName(homePl.region)}`, country: `i hela ${homePl.country}` }[reachLvl] || 'här';
+  const reachHint = reachLvl === 'country' ? `Syns i flödet ${reachIn}.` : `Syns i flödet ${reachIn} – och för den som zoomar ut.`;
   const update = (i, patch) => setSlides((xs) => xs.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const remove = (i) => setSlides((xs) => xs.filter((_, j) => j !== i));
   const move = (i, d) => setSlides((xs) => { const a = [...xs]; [a[i], a[i + d]] = [a[i + d], a[i]]; return a; });
@@ -383,7 +398,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
     setBusy(true);
     try {
       const payload = {
-        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], caption, tags,
+        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], reach: limit ? null : reachNow, caption, tags,
         slides: slides.map(({ id, file, image_url, media_type, text }) => ({ id, file, image_url, media_type, text })),
         finance: type === 'finansiering'
           ? { total: Number(String(finTotal).replace(/\s/g, '')), mode: finMode, expiresAt: finEnd ? new Date(finEnd + 'T23:59:59').toISOString() : null }
@@ -495,12 +510,16 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
         </div>
 
         <div class="set-row">
-          <div class="set-label">Vem ser det</div>
+          <div class="set-label">Relevant för</div>
           <div class="set-body">
-            <div class="seg small-seg" role="radiogroup">
-              <button type="button" role="radio" aria-checked=${!limit} class=${!limit ? 'on' : ''} onClick=${() => setLimit(false)}>Alla</button>
-              <button type="button" role="radio" aria-checked=${limit} class=${limit ? 'on' : ''} onClick=${() => { setLimit(true); if (!visibleTo.length && !isPersonal && groupId) setVisibleTo([groupId]); }}>Valda grupper</button>
+            <div class="reach-pills" role="radiogroup" aria-label="Vilka är inlägget relevant för?">
+              ${reachOptions.map(([lvl, label]) => html`<button type="button" role="radio" key=${lvl}
+                aria-checked=${!limit && (reachNow || reachOptions[0][0]) === lvl} class=${!limit && (reachNow || reachOptions[0][0]) === lvl ? 'on' : ''}
+                onClick=${() => { setLimit(false); setReach(lvl === reachOptions[0][0] ? null : lvl); }}>${label}</button>`)}
+              <button type="button" role="radio" aria-checked=${limit} class=${limit ? 'on' : ''}
+                onClick=${() => { setLimit(true); if (!visibleTo.length && !isPersonal && groupId) setVisibleTo([groupId]); }}>Valda grupper</button>
             </div>
+            <small class="muted">${limit ? 'Bara medlemmar i grupperna du väljer ser inlägget.' : reachHint}</small>
             ${limit && html`<${GroupsPicker} groups=${myGroups} others=${placeGroups.data || []} value=${visibleTo} onChange=${setVisibleTo} />`}
           </div>
         </div>

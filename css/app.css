@@ -1071,3 +1071,7 @@ button.row { width: 100%; text-align: left; }
 .type-pills button { padding: 7px 4px; font-size: 13px; text-align: center; }
 .set-body .tag-input { border: 0; padding: 0; background: transparent; }
 .set-body .tag-input input { padding: 6px 0; }
+
+.reach-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.reach-pills button { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--muted); background: var(--bg); }
+.reach-pills button.on { background: var(--accent); border-color: var(--accent); color: #fff; }

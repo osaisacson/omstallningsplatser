@@ -58,6 +58,15 @@ export function inPlace(group, place) {
 // Var ett inlägg hör hemma: i gruppens plats (även evenemang – adressen visas men styr inte var det syns).
 // Inlägg utan grupp har en egen plats som angavs när det skrevs (äldre evenemang utan grupp: adressens plats).
 const cityRegion = new Map();
+// Var inlägget syns: där det hör hemma och uppåt (som förut), och – om man valt en räckvidd – även i allt
+// som ligger inom den (ett inlägg för hela regionen syns i varje stad och stadsdel där).
+export const REACH_LEVELS = ['district', 'city', 'region', 'country'];
+export function postVisibleAt(p, place) {
+  const pl = postPlace(p);
+  if (inPlace(pl, place)) return true;
+  if (!pl || !p.reach || !place || place.level === 'world') return false;
+  return inPlace(place, { ...pl, level: p.reach });
+}
 export function learnCityRegions(rows = []) {
   for (const r of rows) if (r?.city && r?.region) cityRegion.set(`${(r.country || '').toLowerCase()}|${r.city.toLowerCase()}`, r.region);
 }
@@ -268,7 +277,8 @@ export function normalizePostInput(input) {
   }
   const place = !input.groupId && input.place ? { country: input.place.country || null, region: input.place.region || null, city: input.place.city || null, postcode: input.place.postcode || null } : null;
   const visibleTo = [...new Set((input.visibleTo || []).filter(Boolean))];
-  return { visibleTo, place, groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
+  const reach = REACH_LEVELS.includes(input.reach) ? input.reach : null;
+  return { reach, visibleTo, place, groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
 }
 
 export async function resizeImage(file, max = 1280, quality = 0.82) {

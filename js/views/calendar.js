@@ -3,7 +3,7 @@ import { html, useState, useEffect } from '../lib.js';
 import { api } from '../api/index.js';
 import { useAsync, toast } from '../store.js';
 import { Avatar, Loading, ErrorBox } from '../ui.js';
-import { inPlace, postPlace, eventTitle, calendarSubscribed } from '../util.js';
+import { inPlace, postPlace, postVisibleAt, eventTitle, calendarSubscribed } from '../util.js';
 
 // Prenumerera: telefonens (eller datorns) kalender hämtar en egen hemlig länk regelbundet, så evenemang man är
 // intresserad av, kommer på eller själv lagt upp läggs till – och ändras eller försvinner – av sig själva.
@@ -48,7 +48,7 @@ export function CalendarSetting({ prompt = false }) {
 // Fliken Events i flödet: kommande evenemang i vald plats, dag för dag.
 export function EventsList({ place, empty, match = () => true, subscribe = true }) {
   const events = useAsync(() => api.listEvents(), []);
-  const list = (events.data || []).filter((p) => inPlace(postPlace(p), place) && match(p));
+  const list = (events.data || []).filter((p) => postVisibleAt(p, place) && match(p));
 
   // Gruppera per dag
   const days = [];

@@ -5,7 +5,7 @@ import { html, useState } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, goBack, attempt } from '../store.js';
 import { Icon, PostCard, Loading, ErrorBox, Sheet, Modal } from '../ui.js';
-import { inPlace, postPlace, placeLabel, zoomOut, MEMORY_THEMES, canZoomOut } from '../util.js';
+import { inPlace, postPlace, postVisibleAt, placeLabel, zoomOut, MEMORY_THEMES, canZoomOut } from '../util.js';
 import { PlaceSwitcher } from './place.js';
 
 const NONE = 'Utan kategori';
@@ -48,7 +48,7 @@ export function Memory({ theme }) {
   const [renaming, setRenaming] = useState(null);   // kategorin som byter namn
   const [adding, setAdding] = useState(false);
   const themeList = useAsync(() => api.listMemoryThemes(), []);
-  const saved = (posts.data || []).filter((p) => p.memory_count > 0 && inPlace(postPlace(p), place));
+  const saved = (posts.data || []).filter((p) => p.memory_count > 0 && postVisibleAt(p, place));
   const n = q.trim().toLowerCase();
   // Kategorierna i den ordning de står i listan; sist inlägg som sparats utan kategori.
   const about = Object.fromEntries(MEMORY_THEMES.map((t) => [t.name, t.about]));
