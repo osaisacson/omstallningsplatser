@@ -125,16 +125,31 @@ const clock = (iso) => new Date(iso).toLocaleTimeString('sv-SE', { hour: '2-digi
 export function Inbox() {
   const s = useStore();
   const c = useAsync(() => api.listConversations(), []);
+  const ch = useAsync(() => api.listChats(), []);
+  // Alla samtal i en lista, senaste först: två personer (som förut) och samtal med flera eller med en hel grupp.
+  const rows = [
+    ...(c.data || []).map((x) => ({ key: 'u' + x.user.id, at: x.last.created_at, href: '#/meddelanden/' + x.user.id, unread: x.unread, muted: false,
+      avatar: html`<${Avatar} src=${x.user.avatar_url} name=${x.user.name} size=${52} />`, title: x.user.name,
+      snippet: `${x.last.from_id === s.me.id ? 'Du: ' : ''}${x.last.body}` })),
+    ...(ch.data || []).map((x) => ({ key: 'c' + x.id, at: x.last_message_at, href: '#/samtal/' + x.id, unread: x.unread, muted: x.muted,
+      avatar: x.group_id ? html`<span class="chat-av group"><${Avatar} src=${x.group_avatar} name=${x.group_name} size=${52} /></span>` : html`<span class="chat-av many"><${Avatar} name=${x.title || x.member_names || 'Samtal'} size=${52} /></span>`,
+      title: x.group_id ? x.group_name : x.title || x.member_names || 'Samtal',
+      snippet: x.last_body ? `${x.last_from === s.me.id ? 'Du' : (x.last_from_name || '').split(' ')[0]}: ${x.last_body}` : `${x.member_count} deltagare`,
+      sub: x.group_id ? 'Hela gruppen' : null })),
+  ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const loading = (c.loading && !c.data) || (ch.loading && !ch.data);
   return html`<div class="page">
     <${Header} title="Meddelanden" back right=${html`<a class="iconbtn" href="#/meddelanden/ny" aria-label="Nytt meddelande"><${Icon} name="edit" /></a>`} />
-    ${c.loading && !c.data ? html`<${Loading} />` : c.error ? html`<${ErrorBox} error=${c.error} />`
-      : c.data.length === 0 ? html`<div class="empty">
+    ${loading ? html`<${Loading} />` : c.error ? html`<${ErrorBox} error=${c.error} />`
+      : rows.length === 0 ? html`<div class="empty">
           <p>Inga meddelanden än.</p><a class="btn primary" href="#/meddelanden/ny">Skriv ett meddelande</a></div>`
-      : html`<div class="list">${c.data.map((x) => html`<a key=${x.user.id} class=${'row convo' + (x.unread ? ' unread' : '')} href=${'#/meddelanden/' + x.user.id}>
-          <${Avatar} src=${x.user.avatar_url} name=${x.user.name} size=${52} />
-          <span class="row-main"><strong>${x.user.name}</strong>
-            <small class="snippet">${x.last.from_id === s.me.id ? 'Du: ' : ''}${x.last.body.replace(/\s+/g, ' ')}</small></span>
-          <span class="convo-side"><small class="muted">${timeAgo(x.last.created_at)}</small>${x.unread > 0 && html`<span class="unread-dot" aria-label=${`${x.unread} olästa`}></span>`}</span>
+      : html`<div class="list">${rows.map((x) => html`<a key=${x.key} class=${'row convo' + (x.unread && !x.muted ? ' unread' : '')} href=${x.href}>
+          ${x.avatar}
+          <span class="row-main"><strong>${x.title}${x.sub && html` <small class="chat-kind">${x.sub}</small>`}</strong>
+            <small class="snippet">${x.snippet.replace(/\s+/g, ' ')}</small></span>
+          <span class="convo-side"><small class="muted">${timeAgo(x.at)}</small>
+            ${x.muted ? html`<span class="muted-ico" title="Notiser avstängda"><${Icon} name="bellOff" size=${16} /></span>`
+              : x.unread > 0 && html`<span class="unread-dot" aria-label=${`${x.unread} olästa`}></span>`}</span>
         </a>`)}</div>`}
   </div>`;
 }
@@ -196,9 +211,111 @@ export function NewMessage() {
   const s = useStore();
   const [q, setQ] = useState('');
   const users = useAsync(() => api.listUsers(q), [q]);
+  async function openGroup(g) { const id = await attempt(() => api.groupChat(g.id)); if (id) go('/samtal/' + id); }
   return html`<div class="page">
     <${Header} title="Nytt meddelande" back />
     <div class="searchbar"><input type="search" value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="Sök efter en person" aria-label="Sök efter en person" autofocus /></div>
+    ${!q.trim() && html`<div class="list">
+      <a class="row" href="#/meddelanden/flera"><span class="avatar sys new-chat-ico"><${Icon} name="add" size=${22} /></span>
+        <span class="row-main"><strong>Samtal med flera</strong><small class="muted">Välj personer och ge samtalet ett namn</small></span></a>
+      ${s.myGroups.map((g) => html`<button class="row" key=${g.id} onClick=${() => openGroup(g)}>
+        <${Avatar} src=${g.avatar_url} name=${g.name} size=${40} />
+        <span class="row-main"><strong>${g.name}</strong><small class="muted">Samtal med hela gruppen</small></span></button>`)}
+    </div>
+    <div class="label pad-x">Personer</div>`}
     <div class="list">${(users.data || []).filter((u) => u.id !== s.me.id).map((u) => html`<${UserRow} key=${u.id} user=${u} href=${'#/meddelanden/' + u.id} />`)}</div>
+  </div>`;
+}
+
+// Nytt samtal med flera: bocka i personer, ge ett namn om man vill.
+export function NewChat() {
+  const s = useStore();
+  const [q, setQ] = useState('');
+  const [title, setTitle] = useState('');
+  const [picked, setPicked] = useState([]);
+  const users = useAsync(() => api.listUsers(q), [q]);
+  const toggle = (u) => setPicked((xs) => (xs.some((x) => x.id === u.id) ? xs.filter((x) => x.id !== u.id) : [...xs, u]));
+  async function create() {
+    const id = await attempt(() => api.createChat(title, picked.map((u) => u.id)));
+    if (id) go('/samtal/' + id);
+  }
+  return html`<div class="page">
+    <${Header} title="Samtal med flera" back />
+    <div class="pad form">
+      <label>Namn på samtalet <small class="muted">(valfritt)</small><input value=${title} onInput=${(e) => setTitle(e.target.value)} placeholder="T.ex. Odlingsgänget" /></label>
+      ${picked.length > 0 && html`<div class="tag-input">${picked.map((u) => html`<span class="chip on" key=${u.id}>${u.name}<button type="button" aria-label=${`Ta bort ${u.name}`} onClick=${() => toggle(u)}>×</button></span>`)}</div>`}
+      <button class="btn primary block" disabled=${!picked.length} onClick=${create}>Starta samtalet${picked.length ? ` (${picked.length + 1} personer)` : ''}</button>
+    </div>
+    <div class="searchbar"><input type="search" value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="Sök efter personer" aria-label="Sök efter personer" /></div>
+    <div class="list">${(users.data || []).filter((u) => u.id !== s.me.id).map((u) => html`<label class="row pick" key=${u.id}>
+      <${Avatar} src=${u.avatar_url} name=${u.name} size=${40} /><span class="row-main"><strong>${u.name}</strong></span>
+      <input type="checkbox" checked=${picked.some((x) => x.id === u.id)} onChange=${() => toggle(u)} /></label>`)}</div>
+  </div>`;
+}
+
+// Ett samtal med flera eller med en hel grupp. Klockan uppe till höger stänger av eller slår på notiserna.
+export function ChatView({ chatId }) {
+  const s = useStore();
+  const t = useAsync(() => api.getChat(chatId), [chatId]);
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [muted, setMuted] = useState(null);
+  const end = useRef();
+  const count = t.data?.messages.length;
+  useEffect(() => { if (count != null) { refreshBadges(); end.current?.scrollIntoView({ block: 'end' }); } }, [count]);
+  useEffect(() => { const i = setInterval(() => { if (!document.hidden) t.reload(); }, 15000); return () => clearInterval(i); }, [chatId]);
+  const chat = t.data;
+  const isMuted = muted ?? chat?.muted ?? false;
+  async function send(e) {
+    e?.preventDefault();
+    if (!body.trim() || busy) return;
+    setBusy(true);
+    if (await attempt(() => api.sendChatMessage(chatId, body))) { setBody(''); t.reload(); }
+    setBusy(false);
+  }
+  async function toggleMute() {
+    const next = !isMuted;
+    setMuted(next);
+    if (!(await attempt(() => api.setChatMuted(chatId, next), next ? 'Notiser avstängda för samtalet' : 'Notiser påslagna'))) setMuted(!next);
+    refreshBadges();
+  }
+  const title = chat ? (chat.group ? chat.group.name : chat.title || chat.members.filter((m) => m.id !== s.me.id).map((m) => m.name.split(' ')[0]).join(', ')) : '';
+  const msgs = chat?.messages || [];
+  return html`<div class="page chat">
+    <header class="topbar">
+      <div class="topbar-side"><button class="iconbtn" aria-label="Tillbaka" onClick=${() => goBack('/meddelanden')}><${Icon} name="back" /></button></div>
+      <${chat?.group ? 'a' : 'span'} class="chat-title" href=${chat?.group ? '#/grupp/' + chat.group.id : undefined}>
+        ${chat?.group ? html`<${Avatar} src=${chat.group.avatar_url} name=${chat.group.name} size=${30} />` : chat && html`<${Avatar} name=${title} size=${30} />`}
+        <span class="chat-title-text"><strong>${title}</strong>${chat && html`<small class="muted">${chat.group ? 'Hela gruppen' : `${chat.members.length} deltagare`}</small>`}</span><//>
+      <div class="topbar-side right">${chat && html`<button class=${'iconbtn' + (isMuted ? ' muted-on' : '')} onClick=${toggleMute}
+        aria-pressed=${isMuted} aria-label=${isMuted ? 'Slå på notiser för samtalet' : 'Stäng av notiser för samtalet'} title=${isMuted ? 'Notiser avstängda – tryck för att slå på' : 'Tryck för att stänga av notiser'}>
+        <${Icon} name=${isMuted ? 'bellOff' : 'bell'} /></button>`}</div>
+    </header>
+    <div class="bubbles">
+      ${t.loading && !t.data ? html`<${Loading} />` : t.error ? html`<${ErrorBox} error=${t.error} />`
+        : msgs.length === 0 ? html`<div class="chat-start"><strong>${title}</strong><small class="muted">${chat.group ? 'Alla i gruppen ser det som skrivs här.' : 'Skriv det första meddelandet.'}</small></div>` : null}
+      ${msgs.map((m, i) => {
+        const mine = m.from_id === s.me.id;
+        const prev = msgs[i - 1], next = msgs[i + 1];
+        const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
+        const firstInRun = !prev || prev.from_id !== m.from_id || newDay;
+        const lastInRun = !next || next.from_id !== m.from_id || new Date(next.created_at) - new Date(m.created_at) > 5 * 60e3;
+        return html`<${'div'} key=${m.id}>
+          ${newDay && html`<div class="day">${dayLabel(m.created_at)}</div>`}
+          ${!mine && firstInRun && html`<div class="bubble-name">${m.from?.name || 'Borttagen användare'}</div>`}
+          <div class=${'bubble-row' + (mine ? ' mine' : '')}>
+            <div class=${'bubble' + (lastInRun ? ' tail' : '')}>${linkify(m.body)}</div>
+          </div>
+          ${lastInRun && html`<div class=${'stamp' + (mine ? ' mine' : '')}>${clock(m.created_at)}</div>`}
+        <//>`;
+      })}
+      <div ref=${end}></div>
+    </div>
+    ${chat && html`<form class="composer" onSubmit=${send}>
+      <textarea rows="1" value=${body} placeholder="Meddelande…" aria-label="Meddelande"
+        onInput=${(e) => { setBody(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px'; }}
+        onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}></textarea>
+      <button class="send" disabled=${!body.trim() || busy}>Skicka</button>
+    </form>`}
   </div>`;
 }

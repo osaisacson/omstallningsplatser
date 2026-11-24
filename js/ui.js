@@ -9,6 +9,11 @@ const ICONS = {
   home: '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
   plus: '<rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/>',
+  share: '<path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v12M7 8l5-5 5 5"/>',
+  heartFill: '<path fill="currentColor" d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>',
+  verified: '<path fill="currentColor" stroke="none" d="M12 2l2.4 1.8 3-.2.9 2.9 2.5 1.7-.9 2.8.9 2.8-2.5 1.7-.9 2.9-3-.2L12 22l-2.4-1.8-3 .2-.9-2.9L3.2 15.8l.9-2.8-.9-2.8 2.5-1.7.9-2.9 3 .2z"/><path d="m8.5 12.2 2.4 2.4 4.6-4.8" stroke="#fff" stroke-width="2"/>',
+  volumeOff: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6M21 9l-5 6"/>',
+  volumeOn: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
   heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>',
   chat: '<path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 20.5l1.4-5A8.5 8.5 0 1 1 21 11.5z"/>',
   check: '<rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="m8 12.2 2.8 2.8L16.5 9"/>',
@@ -20,6 +25,7 @@ const ICONS = {
   calendar: '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
   memory: '<path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/>',
   map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>',
+  bellOff: '<path d="M6 8a6 6 0 0 1 9.3-5M18 8c0 7 3 9 3 9H9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0M3 3l18 18M6 8c0 7-3 9-3 9h3"/>',
   bell: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.3-2.4 3.8"/><circle cx="12" cy="17" r=".6" fill="currentColor"/>',
@@ -86,7 +92,9 @@ export function Carousel({ slides, badge = null }) {
   return html`<div class="carousel">
     <div class="frame">
       <div class="track" ref=${ref} onScroll=${onScroll}>
-        ${slides.map((s) => html`<div class="slide"><img src=${s.image_url} alt=${s.text || ''} loading="lazy" decoding="async" /></div>`)}
+        ${slides.map((s, j) => html`<div class="slide">${s.media_type === 'video'
+          ? html`<${AutoVideo} src=${s.image_url} active=${j === i} label=${s.text || ''} />`
+          : html`<img src=${s.image_url} alt=${s.text || ''} loading="lazy" decoding="async" />`}</div>`)}
       </div>
       ${(badge || slides.length > 1) && html`<div class="corner">
         ${badge && html`<span class="img-badge">${badge}</span>`}
@@ -95,7 +103,33 @@ export function Carousel({ slides, badge = null }) {
         ${i < slides.length - 1 && html`<button class="nav next" aria-label="Nästa bild" onClick=${() => to(i + 1)}>›</button>`}
         <div class="dots">${slides.map((_, j) => html`<span class=${j === i ? 'on' : ''}></span>`)}</div>`}
     </div>
-    ${slides[i]?.text && html`<p class="slide-text">${slides[i].text}</p>`}
+    ${slides[i]?.text && html`<p class="slide-text">${linkify(slides[i].text)}</p>`}
+  </div>`;
+}
+
+// Video i ett inlägg: börjar spela (utan ljud) när den syns på skärmen och pausar när man scrollar förbi.
+// Ljudet slås på med knappen i hörnet; valet gäller sedan alla videor tills sidan laddas om.
+let soundOn = false;
+const soundListeners = new Set();
+export function AutoVideo({ src, active = true, label }) {
+  const ref = useRef();
+  const [muted, setMuted] = useState(!soundOn);
+  useEffect(() => { const l = (on) => setMuted(!on); soundListeners.add(l); return () => soundListeners.delete(l); }, []);
+  useEffect(() => { if (ref.current) ref.current.muted = muted; }, [muted]);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && e.intersectionRatio >= 0.6 && active) v.play().catch(() => {});
+      else v.pause();
+    }, { threshold: [0, 0.6, 1] });
+    io.observe(v);
+    return () => io.disconnect();
+  }, [active]);
+  const toggle = (e) => { e.stopPropagation(); soundOn = muted; soundListeners.forEach((l) => l(soundOn)); };
+  return html`<div class="video-wrap">
+    <video ref=${ref} src=${src} muted playsinline loop preload="metadata" aria-label=${label || 'Video'} onClick=${toggle}></video>
+    <button class="video-sound" aria-label=${muted ? 'Slå på ljudet' : 'Stäng av ljudet'} onClick=${toggle}><${Icon} name=${muted ? 'volumeOff' : 'volumeOn'} size=${18} /></button>
   </div>`;
 }
 
@@ -434,7 +468,7 @@ function MemoryButton({ post, onChange }) {
     setBusy(false);
     onChange?.();
   }
-  return html`<span>
+  return html`<span class="memory-wrap">
     <button class=${'action memory' + (mine ? ' on' : '')} onClick=${() => (mine ? save([]) : setPicking(true))} aria-pressed=${mine}
       aria-label=${mine ? 'Ta bort ur Minne' : 'Spara i Minne'} title=${mine ? 'Ta bort ur Minne' : 'Spara i Minne'}>
       <span>${count}</span><${Icon} name="memory" size=${22} /></button>
@@ -472,43 +506,71 @@ export function ThemePicker({ onPick, onClose, title = 'Spara i Minne', hint = '
 // Har en admin valt att publicera som gruppen är det tvärtom: gruppen är avsändaren och "via Namn" står under.
 // Inlägg som bara vissa grupper ser får en liten markering.
 const limited = (p) => p.visible_to?.length > 0 && html`<span class="limited" title="Syns bara för medlemmar i de grupper som valts">Bara för ${p.visible_to.length === 1 ? 'en grupp' : p.visible_to.length + ' grupper'}</span>`;
+// Verifierad medlem i inläggets grupp: en liten bock bredvid namnet (gruppens admins verifierar).
+export const VerifiedBadge = ({ title = 'Verifierad medlem' }) => html`<span class="verified-badge" title=${title} aria-label=${title}><${Icon} name="verified" size=${14} /></span>`;
 export function PostHead({ post: p, children }) {
   const g = p.group, a = p.author;
+  const when = html`<span class="head-time" title=${new Date(p.created_at).toLocaleString('sv-SE')}> · ${timeAgo(p.created_at)}</span>`;
   if (p.as_group && g) return html`<div class="post-head">
     <a href=${'#/grupp/' + g.id}><${Avatar} src=${g.avatar_url} name=${g.name} size=${36} /></a>
-    <div class="who"><a class="strong" href=${'#/grupp/' + g.id}>${g.name}</a><a class="by" href=${'#/profil/' + a.id}>via ${a.name}</a>${limited(p)}</div>
+    <div class="who"><span class="who-line"><a class="strong" href=${'#/grupp/' + g.id}>${g.name}</a>${when}</span><a class="by" href=${'#/profil/' + a.id}>via ${a.name}</a>${limited(p)}</div>
     ${children}</div>`;
   return html`<div class="post-head">
     <a class="head-avatar" href=${'#/profil/' + a.id}><${Avatar} src=${a.avatar_url} name=${a.name} size=${36} />
       ${g && html`<span class="head-group" title=${g.name}><${Avatar} src=${g.avatar_url} name=${g.name} size=${18} /></span>`}</a>
-    <div class="who"><a class="strong" href=${'#/profil/' + a.id}>${a.name}</a>
+    <div class="who"><span class="who-line"><a class="strong" href=${'#/profil/' + a.id}>${a.name}</a>${p.author_verified && html`<${VerifiedBadge} title=${`Verifierad medlem i ${g?.name || 'gruppen'}`} />`}${when}</span>
       ${g && html`<a class="by" href=${'#/grupp/' + g.id}>om <b>${g.name}</b></a>`}${limited(p)}</div>
     ${children}</div>`;
+}
+
+// Hjärta: gilla eller ta tillbaka. Visas direkt, sparas i bakgrunden.
+export function LikeButton({ liked, count, onToggle, size = 22, label = 'inlägget' }) {
+  const [st, setSt] = useState({ liked, count });
+  useEffect(() => setSt({ liked, count }), [liked, count]);
+  async function toggle() {
+    const next = { liked: !st.liked, count: st.count + (st.liked ? -1 : 1) };
+    setSt(next);
+    try { await onToggle(next.liked); } catch (e) { setSt(st); toast(e.message); }
+  }
+  return html`<button class=${'action like' + (st.liked ? ' on' : '')} aria-pressed=${st.liked} aria-label=${st.liked ? `Sluta gilla ${label}` : `Gilla ${label}`} onClick=${toggle}>
+    <${Icon} name=${st.liked ? 'heartFill' : 'heart'} size=${size} />${st.count > 0 && html`<span>${st.count}</span>`}</button>`;
+}
+
+// Dela: telefonens egna delningsmeny när den finns, annars kopieras länken.
+export async function sharePost(p) {
+  const url = `${location.origin}${location.pathname}#/post/${p.id}`;
+  const title = (p.caption || 'Inlägg').split('\n')[0].slice(0, 80);
+  try {
+    if (navigator.share) { await navigator.share({ title, text: title, url }); return; }
+  } catch (e) { if (e?.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast('Länken är kopierad'); } catch { prompt('Kopiera länken:', url); }
 }
 
 export function PostCard({ post: p, onChange, full = false }) {
   const [applying, setApplying] = useState(false);
   const edited = new Date(p.updated_at) - new Date(p.created_at) > 60e3;
-  // Märke uppe till höger på bilden för finansiering och lokaler.
+  // Märke uppe till höger på bilden för finansiering och resurser.
   const kind = postType(p);
-  const badge = p.is_event ? 'Evenemang' : kind === 'finansiering' ? 'Finansiering' : kind === 'lokal' ? 'Lokal' : null;
+  const badge = p.is_event ? 'Evenemang' : kind === 'finansiering' ? 'Finansiering' : kind === 'lokal' ? 'Resurs' : null;
   return html`<article class="post">
     <${PostHead} post=${p}><${PostMenu} post=${p} onChange=${onChange} /><//>
     ${p.slides.length ? html`<${Carousel} slides=${p.slides} badge=${badge} />`
-      : html`<div class="textpost">${badge && html`<span class="img-badge corner-solo">${badge}</span>`}${p.caption}</div>`}
+      : html`<div class="textpost">${badge && html`<span class="img-badge corner-solo">${badge}</span>`}${linkify(p.caption)}</div>`}
     <div class="post-body">
-      ${p.slides.length > 0 && p.caption && html`<p class="caption">${p.caption}</p>`}
+      ${p.slides.length > 0 && p.caption && html`<p class="caption">${linkify(p.caption)}</p>`}
       ${kind === 'lokal' && html`<p class="space-info">${(p.space_functions || []).join(' · ')}
         <span class="space-cost">${SPACE_COSTS[p.space_cost] || ''}${p.space_cost === 'kostar' && p.space_price ? `: ${p.space_price}` : ''}</span></p>`}
       ${kind === 'vanlig' && p.categories?.length > 0 && html`<p class="topics">${p.categories.map((c) => html`<span>#${c.toLowerCase()}</span>`)}</p>`}
       ${p.is_event && p.event_start && html`<${EventBox} post=${p} />`}
       ${p.finance && html`<${FinanceBox} post=${p} onApply=${() => setApplying(true)} />`}
       <div class="post-actions">
+        <${LikeButton} liked=${p.liked} count=${p.like_count || 0} onToggle=${(on) => api.likePost(p.id, on)} />
         <a class="action" href=${'#/post/' + p.id} aria-label=${`${p.comment_count} kommentarer`}><${Icon} name="chat" size=${22} /><span>${p.comment_count}</span></a>
+        <button class="action" aria-label="Dela inlägget" onClick=${() => sharePost(p)}><${Icon} name="share" size=${22} /></button>
         <${MemoryButton} post=${p} onChange=${onChange} />
       </div>
       ${!full && p.first_comment && html`<a class="first-comment" href=${'#/post/' + p.id}><strong>${p.first_comment.group?.name || p.first_comment.author.name}</strong> ${p.first_comment.body}</a>`}
-      <div class="time">${timeAgo(p.created_at)}${edited ? ' · redigerad' : ''}</div>
+      ${edited && html`<div class="time">Redigerad</div>`}
     </div>
     ${applying && html`<${ApplyForm} post=${p} onClose=${() => setApplying(false)}
       onDone=${() => { setApplying(false); onChange?.(); if (!full) go('/post/' + p.id); }} />`}
@@ -561,9 +623,10 @@ function CommentNode({ c, post, children, depth, onChange }) {
             : html`<a class="strong" href=${'#/profil/' + c.author.id}>${c.author.name}</a>`}
           ${c.status && html`<span class=${'badge ' + c.status}>${STATUS[c.status]}</span>`}
           ${c.applied_amount != null && html`<span class="amount">${fmtKr(c.applied_amount)}</span>`}</div>
-        ${!collapsed && html`<p class="c-body">${c.body}</p>
+        ${!collapsed && html`<p class="c-body">${linkify(c.body)}</p>
           ${c.payout && html`<div class="payout" title="Syns bara för den som sökt och den som delar ut">🔒 ${c.payout}</div>`}`}
         <div class="c-meta">${timeAgo(c.created_at)}
+          ${!collapsed && html` · <${LikeButton} liked=${c.liked} count=${c.like_count || 0} size=${14} label="kommentaren" onToggle=${(on) => api.likeComment(c.id, on)} />`}
           ${!collapsed && html` · <button class="link-quiet" onClick=${() => setReplying((x) => !x)}>Svara</button>`}
           ${kids.length > 0 && html` · <button class="link-quiet" onClick=${() => setCollapsed((x) => !x)}>${collapsed ? `Visa ${countAll(c.id)} svar` : 'Dölj svar'}</button>`}</div>
         ${!collapsed && mine && c.status === 'applied' && html`<div class="c-actions">
@@ -587,7 +650,7 @@ export function PostGrid({ posts, showAuthor = false, empty = 'Inga inlägg än.
   return html`<div class="grid">${posts.map((p) => html`<a class="tile" href=${'#/post/' + p.id} key=${p.id}>
     ${p.slides[0] ? html`<img src=${p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${p.caption}</span>`}
     ${p.slides.length > 1 && html`<span class="tile-icon"><${Icon} name="layers" size=${18} /></span>`}
-    ${(p.is_event || p.finance || postType(p) === 'lokal') && html`<span class="tile-kind">${p.is_event ? 'Evenemang' : p.finance ? 'Finansiering' : 'Lokal'}</span>`}
+    ${(p.is_event || p.finance || postType(p) === 'lokal') && html`<span class="tile-kind">${p.is_event ? 'Evenemang' : p.finance ? 'Finansiering' : 'Resurs'}</span>`}
     ${showAuthor && html`<span class="tile-author"><${Avatar} src=${p.author.avatar_url} name=${p.author.name} size=${20} /></span>`}
   </a>`)}</div>`;
 }
@@ -691,8 +754,14 @@ function CropModal({ file, onCancel, onDone }) {
   <//>`;
 }
 
-// Gör "#/post/<id>" i meddelanden klickbart.
+// Gör webbadresser (https://…, www.…) och "#/post/<id>" klickbara i all text.
+const LINK_RE = /(#\/post\/[0-9a-f-]{36}|https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"”]|www\.[^\s<]+[^\s<.,;:!?)\]'"”])/g;
 export function linkify(text) {
-  return text.split(/(#\/post\/[0-9a-f-]{36})/g).map((part) =>
-    part.startsWith('#/post/') ? html`<a class="msg-link" href=${part}>Visa inlägget</a>` : part);
+  if (!text) return text;
+  return String(text).split(LINK_RE).map((part, i) => {
+    if (i % 2 === 0) return part;
+    if (part.startsWith('#/post/')) return html`<a class="msg-link" href=${part}>Visa inlägget</a>`;
+    const url = part.startsWith('www.') ? 'https://' + part : part;
+    return html`<a class="auto-link" href=${url} target="_blank" rel="noopener noreferrer" onClick=${(e) => e.stopPropagation()}>${part.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>`;
+  });
 }

@@ -35,6 +35,24 @@ function translate(msg) {
 }
 function needMe() { if (!meId) throw new Error('Du är inte inloggad.'); return meId; }
 
+// Videor laddas upp som de är (ingen omkodning i webbläsaren). Supabase tar emot högst 50 MB per fil.
+const VIDEO_MAX = 50 * 1024 * 1024;
+async function uploadVideo(file) {
+  if (file.size > VIDEO_MAX) throw new Error('Videon är för stor – högst 50 MB. Korta den eller spela in i lägre kvalitet.');
+  const ext = (file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
+  const path = `${needMe()}/${crypto.randomUUID()}.${ext}`;
+  ok(await sb.storage.from('media').upload(path, file, { contentType: file.type || 'video/mp4' }));
+  return sb.storage.from('media').getPublicUrl(path).data.publicUrl;
+}
+// Märker vilka författare som är verifierade medlemmar i inläggets grupp.
+async function markVerified(posts) {
+  const gids = [...new Set(posts.map((p) => p.group_id).filter(Boolean))];
+  if (!gids.length) return posts;
+  const rows = ok(await sb.from('group_members').select('group_id, user_id').in('group_id', gids).eq('verified', true));
+  const v = new Set(rows.map((r) => r.group_id + '|' + r.user_id));
+  for (const p of posts) p.author_verified = !!p.group_id && v.has(p.group_id + '|' + p.author_id);
+  return posts;
+}
 async function upload(file, max = 1280) {
   const blob = await resizeImage(file, max);
   const path = `${needMe()}/${crypto.randomUUID()}.jpg`;
@@ -43,7 +61,7 @@ async function upload(file, max = 1280) {
 }
 
 const PROFILE = 'id,name,avatar_url';
-const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles(id,name),group:groups(id,name)), memory_votes(user_id,theme,themes,created_at), event_rsvps(user_id,status)`;
+const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text,media_type), post_likes(user_id), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles(id,name),group:groups(id,name)), memory_votes(user_id,theme,themes,created_at), event_rsvps(user_id,status)`;
 
 function shapePost(p) {
   const cs = p.comments || [];
@@ -58,6 +76,7 @@ function shapePost(p) {
     rsvp_interested: (p.event_rsvps || []).filter((r) => r.status === 'interested').length,
     rsvp_going: (p.event_rsvps || []).filter((r) => r.status === 'going').length,
     rsvp_mine: (p.event_rsvps || []).find((r) => r.user_id === meId)?.status || null, event_rsvps: undefined,
+    like_count: (p.post_likes || []).length, liked: (p.post_likes || []).some((l) => l.user_id === meId), post_likes: undefined,
   };
 }
 // Inläggets egen plats används bara när det saknar grupp.
@@ -87,7 +106,9 @@ async function writeSlides(postId, slides) {
   if (keep.length) del = del.not('id', 'in', `(${keep.join(',')})`);
   ok(await del);
   for (const [i, s] of slides.entries()) {
-    const row = { post_id: postId, position: i, text: (s.text || '').trim(), image_url: s.file ? await upload(s.file) : s.image_url };
+    const video = s.file ? s.file.type.startsWith('video/') : s.media_type === 'video';
+    const row = { post_id: postId, position: i, text: (s.text || '').trim(), media_type: video ? 'video' : 'image',
+      image_url: s.file ? await (video ? uploadVideo(s.file) : upload(s.file)) : s.image_url };
     if (s.id) ok(await sb.from('post_slides').update(row).eq('id', s.id));
     else ok(await sb.from('post_slides').insert(row));
   }
@@ -183,7 +204,7 @@ export const api = {
     return rows.map((r) => ({ ...r.group, role: r.role })).sort((a, b) => a.name.localeCompare(b.name, 'sv'));
   },
   async getGroup(id) {
-    const g = ok(await sb.from('groups').select(`*, group_members(role, joined_at, user:profiles(${PROFILE})), highlights(*)`).eq('id', id).single());
+    const g = ok(await sb.from('groups').select(`*, group_members(role, joined_at, verified, user:profiles(${PROFILE})), highlights(*)`).eq('id', id).single());
     const { group_members, highlights, ...rest } = g;
     return {
       ...rest,
@@ -234,17 +255,18 @@ export const api = {
     if (groupId) query = query.eq('group_id', groupId);
     if (authorId) query = query.eq('author_id', authorId);
     if (q.trim()) query = query.ilike('caption', `%${q.trim()}%`);
-    const ps = ok(await query).map(shapePost);
+    const ps = await markVerified(ok(await query).map(shapePost));
     return feed ? ps.filter(visibleInFeed) : ps;
   },
   async getPost(id) {
     const p = ok(await sb.from('posts').select(POST_SELECT).eq('id', id).maybeSingle());
     if (!p) throw new Error('Inlägget finns inte (längre).');
-    const comments = ok(await sb.from('comments').select(`*, author:profiles(${PROFILE}), group:groups(id,name,avatar_url)`).eq('post_id', id).order('created_at'));
+    const comments = ok(await sb.from('comments').select(`*, author:profiles(${PROFILE}), group:groups(id,name,avatar_url), comment_likes(user_id)`).eq('post_id', id).order('created_at'));
     const ids = comments.filter((c) => c.status).map((c) => c.id);
     const payouts = ids.length ? ok(await sb.from('payouts').select('*').in('comment_id', ids)) : [];
     const byId = Object.fromEntries(payouts.map((x) => [x.comment_id, x.details]));
-    return { ...shapePost(p), comments: comments.map((c) => ({ ...c, payout: byId[c.id] ?? null })) };
+    const [post] = await markVerified([shapePost(p)]);
+    return { ...post, comments: comments.map(({ comment_likes: cl = [], ...c }) => ({ ...c, payout: byId[c.id] ?? null, like_count: cl.length, liked: cl.some((l) => l.user_id === meId) })) };
   },
   async createPost(input) {
     const v = normalizePostInput(input);
@@ -375,6 +397,38 @@ export const api = {
     ok(await sb.from('messages').insert({ from_id: needMe(), to_id: userId, body: body.trim() }));
   },
 
+  // ---- Gilla ----
+  async likePost(id, on) {
+    if (on) ok(await sb.from('post_likes').upsert({ post_id: id, user_id: needMe() }, { onConflict: 'post_id,user_id', ignoreDuplicates: true }));
+    else ok(await sb.from('post_likes').delete().eq('post_id', id).eq('user_id', needMe()));
+  },
+  async likeComment(id, on) {
+    if (on) ok(await sb.from('comment_likes').upsert({ comment_id: id, user_id: needMe() }, { onConflict: 'comment_id,user_id', ignoreDuplicates: true }));
+    else ok(await sb.from('comment_likes').delete().eq('comment_id', id).eq('user_id', needMe()));
+  },
+
+  // ---- Verifiering ----
+  async setGroupVerified(id, on) { ok(await sb.rpc('set_group_verified', { p_group: id, p_on: on })); },
+  async setMemberVerified(groupId, userId, on) { ok(await sb.rpc('set_member_verified', { p_group: groupId, p_user: userId, p_on: on })); },
+
+  // ---- Samtal med flera / med en hel grupp ----
+  async listChats() { return ok(await sb.rpc('my_chats')); },
+  async getChat(id) {
+    const chat = ok(await sb.from('chats').select('*, group:groups(id,name,avatar_url), chat_members(user_id, muted, user:profiles(' + PROFILE + '))').eq('id', id).maybeSingle());
+    if (!chat) throw new Error('Samtalet finns inte, eller så är du inte med i det.');
+    const msgs = ok(await sb.from('chat_messages').select(`*, from:profiles(${PROFILE})`).eq('chat_id', id).order('created_at').limit(500));
+    sb.rpc('mark_chat_read', { p_chat: id }).then(() => {}, () => {});
+    const { chat_members: cm = [], ...c } = chat;
+    return { ...c, members: cm.map((m) => m.user).filter(Boolean), muted: !!cm.find((m) => m.user_id === meId)?.muted, messages: msgs };
+  },
+  async sendChatMessage(id, body) {
+    if (!body?.trim()) throw new Error('Skriv något först.');
+    ok(await sb.from('chat_messages').insert({ chat_id: id, from_id: needMe(), body: body.trim() }));
+  },
+  async createChat(title, userIds) { return ok(await sb.rpc('create_chat', { p_title: title || null, p_users: userIds })); },
+  async groupChat(groupId) { return ok(await sb.rpc('group_chat', { p_group: groupId })); },
+  async setChatMuted(id, muted) { ok(await sb.rpc('set_chat_muted', { p_chat: id, p_muted: muted })); },
+
   // ---- Redaktionen ----
   async listEditors() {
     const [rows, grp] = await Promise.all([
@@ -450,13 +504,14 @@ export const api = {
   async badges() {
     if (!meId) return { notifications: 0, messages: 0, todos: 0 };
     const count = async (q) => (await q).count ?? 0;
-    const [notifications, messages, todos, reports, adminReqs] = await Promise.all([
+    const [notifications, dms, chatUnread, todos, reports, adminReqs] = await Promise.all([
       count(sb.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', meId).eq('read', false)),
       count(sb.from('messages').select('id', { count: 'exact', head: true }).eq('to_id', meId).eq('read', false)),
+      sb.rpc('my_chat_unread').then((r) => r.data || 0, () => 0),
       count(sb.from('comments').select('id, post:posts!inner(author_id)', { count: 'exact', head: true }).in('status', ['applied', 'granted']).eq('post.author_id', meId)),
       meEditor ? count(sb.from('reports').select('id', { count: 'exact', head: true }).is('done_at', null)) : 0,
       meEditor ? count(sb.from('admin_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending')) : 0,
     ]);
-    return { notifications, messages, todos: todos + reports + adminReqs };
+    return { notifications, messages: dms + chatUnread, todos: todos + reports + adminReqs };
   },
 };

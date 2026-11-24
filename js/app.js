@@ -6,7 +6,7 @@ import { Icon, Avatar, Count } from './ui.js';
 import { Home, PostView, Compose } from './views/feed.js';
 import { GroupView, GroupSettings, NewGroup, Welcome } from './views/groups.js';
 import { AuthView, Search, Profile, EditProfile, NewPassword } from './views/people.js';
-import { Notifications, Todos, Inbox, Thread, NewMessage } from './views/inbox.js';
+import { Notifications, Todos, Inbox, Thread, NewMessage, NewChat, ChatView } from './views/inbox.js';
 import { MapView } from './views/map.js';
 import { Help, Feedback, FeedbackView } from './views/help.js';
 import { InstallSheet } from './install.js';
@@ -41,7 +41,8 @@ function route({ parts: [a, b, c], query }) {
     case 'ny-grupp': return html`<${NewGroup} next=${query.get('next')} />`;
     case 'valkommen': return html`<${Welcome} />`;
     case 'post': return c === 'redigera' ? html`<${Compose} editId=${b} />` : html`<${PostView} id=${b} />`;
-    case 'meddelanden': return b === 'ny' ? html`<${NewMessage} />` : b ? html`<${Thread} userId=${b} />` : html`<${Inbox} />`;
+    case 'meddelanden': return b === 'ny' ? html`<${NewMessage} />` : b === 'flera' ? html`<${NewChat} />` : b ? html`<${Thread} userId=${b} />` : html`<${Inbox} />`;
+    case 'samtal': return html`<${ChatView} chatId=${b} key=${b} />`;
     case 'att-gora': return html`<${Todos} />`;
     default: return html`<p class="empty">Sidan finns inte. <a href="#/">Till flödet</a></p>`;
   }

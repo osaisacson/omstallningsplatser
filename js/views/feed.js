@@ -17,9 +17,14 @@ import { EventsList } from './calendar.js';
 // Flödet hämtas 30 inlägg i taget; nästa omgång hämtas när man närmar sig slutet (eller när den valda
 // platsen eller fliken har för lite att visa), så att appen håller farten även med väldigt många inlägg.
 const PAGE = 30;
+// Flödet och var man var i det sparas när man lämnar det (t.ex. öppnar ett inlägg), så att man kommer
+// tillbaka till samma inlägg i stället för till toppen. Allt hämtas om i bakgrunden när man kommer tillbaka.
+let feedCache = null;
+export const feedScroll = { y: 0 };
 function usePagedPosts() {
-  const [st, setSt] = useState({ data: null, loading: true, error: null, done: false });
+  const [st, setSt] = useState(() => feedCache ? { ...feedCache, loading: false } : { data: null, loading: true, error: null, done: false });
   const ref = useRef(st); ref.current = st;
+  useEffect(() => { if (st.data) feedCache = st; }, [st]);
   const busy = useRef(false);
   async function load(reset) {
     if (busy.current) return;
@@ -34,7 +39,7 @@ function usePagedPosts() {
     } catch (error) { setSt((x) => ({ ...x, loading: false, error })); }
     busy.current = false;
   }
-  useEffect(() => { load(true); return onRefresh(() => { busy.current = false; return load(true); }); }, []);
+  useEffect(() => { load(true); return onRefresh(() => { busy.current = false; return load(true); }); }, []);   // vid återkomst: hämtar om lika många som visas
   return { ...st, data: st.data && st.data.filter(visibleInFeed), more: () => !ref.current.done && load(false), reload: () => load(true) };
 }
 
@@ -103,17 +108,25 @@ function SinceLast({ here, posts, where }) {
   </div>`;
 }
 
-const TABS = [['flode', 'Flöde'], ['finansiering', 'Finansiering'], ['lokal', 'Lokaler'], ['evenemang', 'Events']];
+const TABS = [['flode', 'Flöde'], ['finansiering', 'Finansiering'], ['lokal', 'Resurser'], ['evenemang', 'Events']];
 
 export function Home({ tab: startTab }) {
   const s = useStore();
+  // Tillbaka till samma ställe i flödet. Sparas medan man scrollar, återställs när sidan visas igen.
+  useEffect(() => {
+    const y = feedScroll.y;
+    if (y > 0) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+    // Bara medan flödet visas (när man byter sida scrollas fönstret till toppen – det ska inte sparas).
+    const save = () => { if (/^#?\/?(\?|$)/.test(location.hash.replace(/^#/, '')) || location.hash === '') feedScroll.y = window.scrollY; };
+    addEventListener('scroll', save, { passive: true });
+    return () => removeEventListener('scroll', save);
+  }, []);
   const [tab, setTab] = useState(() => { let t; try { t = startTab || sessionStorage.getItem('tab'); } catch { t = startTab; } return TABS.some(([k]) => k === t) ? t : 'flode'; });
-  const [fn, setFn] = useState('');        // Lokaler: användningsområde (fritext)
-  const [cost, setCost] = useState('');    // Lokaler: kostnad (fritext)
+  const [fn, setFn] = useState('');        // Resurser: vad det är (fritext)
+  const [cost, setCost] = useState('');    // Resurser: kostnad (fritext)
   const groups = useAsync(() => api.listGroups(), []);
   const posts = usePagedPosts();
   const place = s.place || { level: 'world' };
-  const fresh = (g) => Date.now() - new Date(g.last_activity_at) < 24 * 3600e3;
   const choose = (t) => { setTab(t); try { sessionStorage.setItem('tab', t); } catch {} };
 
   const here = (posts.data || []).filter((p) => inPlace(postPlace(p), place));
@@ -148,7 +161,7 @@ export function Home({ tab: startTab }) {
     <div class="stories">
       <a class="story" href="#/ny-grupp"><span class="story-new">+</span><span class="story-name">Ny grupp</span></a>
       ${localGroups.map((g) => html`<a class="story" href=${'#/grupp/' + g.id} key=${g.id}>
-        <span class=${'story-ring' + (fresh(g) ? ' fresh' : '')}><${Avatar} src=${g.avatar_url} name=${g.name} size=${60} /></span>
+        <span class=${'story-ring' + (g.verified_at ? ' verified' : '')} title=${g.verified_at ? 'Verifierad grupp' : ''}><${Avatar} src=${g.avatar_url} name=${g.name} size=${60} /></span>
         <span class="story-name">${g.name}</span></a>`)}
     </div>
 
@@ -160,11 +173,11 @@ export function Home({ tab: startTab }) {
       <div class="tab-info">
         ${tab === 'finansiering' && html`<span class="muted small">Pengar som grupper i ${where} kan söka just nu${available > 0 ? html` – totalt <b class="avail">${fmtKr(available)}</b> tillgängligt` : ''}.</span>`}
         ${tab === 'evenemang' && html`<span class="muted small">Kommande evenemang i ${where}, dag för dag</span>`}
-        ${tab === 'lokal' && html`<span class="muted small">Lokaler att låna, använda mot en gentjänst eller hyra i ${where}</span>`}
+        ${tab === 'lokal' && html`<span class="muted small">Lokaler, verktyg och annat att låna, använda mot en gentjänst eller hyra i ${where}</span>`}
       </div>
     </div>`}
     ${tab === 'lokal' && html`<div class="space-filters">
-      <${FilterCombo} value=${fn} onChange=${setFn} options=${functions} placeholder="Användning" />
+      <${FilterCombo} value=${fn} onChange=${setFn} options=${functions} placeholder="Vad" />
       <${FilterCombo} value=${cost} onChange=${setCost} options=${Object.values(SPACE_COSTS)} placeholder="Kostnad" />
     </div>`}
 
@@ -173,7 +186,7 @@ export function Home({ tab: startTab }) {
           ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> högst upp för att zooma ut till ${placeLabel(zoomOut(place))}.</span>`}</p>`} />`
       : posts.loading && !posts.data ? html`<${FeedSkeleton} />` : posts.error ? html`<${ErrorBox} error=${posts.error} />`
       : shown.length === 0 && !posts.done ? html`<${FeedSkeleton} n=${1} />`
-      : shown.length === 0 ? html`<p class="empty">${{ flode: 'Inga inlägg', finansiering: 'Ingen finansiering att söka', lokal: 'Inga lokaler', }[tab]} i ${where}${(fn || cost) ? ' som matchar' : ' än'}.
+      : shown.length === 0 ? html`<p class="empty">${{ flode: 'Inga inlägg', finansiering: 'Ingen finansiering att söka', lokal: 'Inga resurser', }[tab]} i ${where}${(fn || cost) ? ' som matchar' : ' än'}.
           ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> högst upp för att zooma ut till ${placeLabel(zoomOut(place))}.</span>`}</p>`
       : html`<div class="feed">${shown.map((p) => html`<${PostCard} key=${p.id} post=${p} onChange=${posts.reload} />`)}</div>`}
     ${tab !== 'evenemang' && posts.data && html`<${LoadMore} posts=${posts} short=${shown.length < 12} />`}
@@ -212,11 +225,11 @@ export function PostView({ id }) {
 const plusDays = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
 
 // Typerna man väljer mellan när man lägger upp något. Evenemang sparas som ett vanligt inlägg med datum, tid och plats.
-const FORM_TYPES = { vanlig: 'Vanlig post', evenemang: 'Evenemang', finansiering: 'Tillgänglig finansiering', lokal: 'Lokal att låna eller hyra' };
+const FORM_TYPES = { vanlig: 'Vanlig post', evenemang: 'Evenemang', finansiering: 'Tillgänglig finansiering', lokal: 'Resurs att låna eller hyra' };
 const TYPE_HELP = {
   evenemang: 'Något som händer en viss dag: får tid och plats, syns under Events och folk kan anmäla sig.',
   finansiering: 'Pengar som andra grupper kan söka. Syns under Finansiering.',
-  lokal: 'En lokal andra kan låna, använda mot en gentjänst eller hyra. Syns under Lokaler.',
+  lokal: 'Något andra kan låna, använda mot en gentjänst eller hyra – en lokal, verktyg, en maskin, mark. Syns under Resurser.',
 };
 const TYPE_TITLE = { vanlig: 'Nytt inlägg', evenemang: 'Nytt evenemang', finansiering: 'Ny finansiering', lokal: 'Ny lokal' };
 
@@ -237,6 +250,24 @@ function FinanceSteps() {
 }
 
 // Chips att välja bland. Plus-chippen först öppnar ett litet fält: börja skriva för att välja ett befintligt eller lägga till ett nytt.
+// Taggar skrivs fritt: Enter, komma eller mellanslag gör en tagg av det man skrivit. # behövs inte.
+function TagInput({ value, onChange }) {
+  const [text, setText] = useState('');
+  const clean = (t) => t.replace(/^#+/, '').trim();
+  const add = (raw) => {
+    const t = clean(raw);
+    if (t && !value.some((v) => v.toLowerCase() === t.toLowerCase())) onChange([...value, t]);
+    setText('');
+  };
+  return html`<div class="tag-input">
+    ${value.map((t) => html`<span class="chip on" key=${t}>#${t.toLowerCase()}<button type="button" aria-label=${`Ta bort ${t}`} onClick=${() => onChange(value.filter((x) => x !== t))}>×</button></span>`)}
+    <input value=${text} placeholder=${value.length ? 'Fler taggar…' : 'T.ex. solceller, odling, vatten'} aria-label="Skriv en tagg"
+      onInput=${(e) => { const v = e.target.value; if (/[ ,]$/.test(v)) add(v.slice(0, -1)); else setText(v); }}
+      onKeyDown=${(e) => { const v = e.target.value; if (e.key === 'Enter') { e.preventDefault(); if (v.trim()) add(v); } if (e.key === 'Backspace' && !v && value.length) onChange(value.slice(0, -1)); }}
+      onBlur=${(e) => e.target.value.trim() && add(e.target.value)} />
+  </div>`;
+}
+
 function ChipPicker({ options, selected, onChange, placeholder }) {
   const [extra, setExtra] = useState([]);
   const [adding, setAdding] = useState(false);
@@ -275,7 +306,6 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   const editing = !!editId;
   const fixedType = editing || !!FORM_TYPES[initialType];   // från en flik: typen är redan vald
   const myGroups = s.myGroups;
-  const tagOptions = useAsync(() => api.listCategories(), []);
   const spaceOptions = useAsync(async () => [...new Set([...DEFAULT_FUNCTIONS, ...(await api.listPosts({ kind: 'lokal' })).flatMap((p) => p.space_functions || [])])], []);
   const [loaded, setLoaded] = useState(!editing);
   const [type, setType] = useState(FORM_TYPES[initialType] ? initialType : 'vanlig');
@@ -308,7 +338,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
     api.getPost(editId).then((p) => {
       if (p.author_id !== s.me.id) return go('/post/' + editId);
       setType(p.is_event ? 'evenemang' : postType(p));
-      setSlides(p.slides.map((x) => ({ key: x.id, id: x.id, image_url: x.image_url, preview: x.image_url, text: x.text || '' })));
+      setSlides(p.slides.map((x) => ({ key: x.id, id: x.id, image_url: x.image_url, media_type: x.media_type || 'image', preview: x.image_url, text: x.text || '' })));
       setCaption(p.caption || ''); setGroupId(p.group_id); setPersonal(!p.group_id); setAsGroup(!!p.as_group); setVisibleTo(p.visible_to || []); setLimit(!!p.visible_to?.length);
       if (!p.group_id && p.country) setWhere({ ...emptyHome(), country: p.country, region: p.region || '', city: p.city || '', postcode: p.postcode || null });
       setTags(p.categories || []);
@@ -335,7 +365,9 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   const move = (i, d) => setSlides((xs) => { const a = [...xs]; [a[i], a[i + d]] = [a[i + d], a[i]]; return a; });
   function addFiles(e) {
     const files = [...e.target.files];
-    setSlides((xs) => [...xs, ...files.map((file) => ({ key: crypto.randomUUID(), file, preview: URL.createObjectURL(file), text: '' }))]);
+    const big = files.find((f) => f.type.startsWith('video/') && f.size > 50 * 1024 * 1024);
+    if (big) setErr(`${big.name} är för stor – videor får vara högst 50 MB.`);
+    setSlides((xs) => [...xs, ...files.filter((f) => f !== big).map((file) => ({ key: crypto.randomUUID(), file, media_type: file.type.startsWith('video/') ? 'video' : 'image', preview: URL.createObjectURL(file), text: '' }))]);
     e.target.value = '';
   }
 
@@ -349,7 +381,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
     try {
       const payload = {
         type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], caption, tags,
-        slides: slides.map(({ id, file, image_url, text }) => ({ id, file, image_url, text })),
+        slides: slides.map(({ id, file, image_url, media_type, text }) => ({ id, file, image_url, media_type, text })),
         finance: type === 'finansiering'
           ? { total: Number(String(finTotal).replace(/\s/g, '')), mode: finMode, expiresAt: finEnd ? new Date(finEnd + 'T23:59:59').toISOString() : null }
           : null,
@@ -387,8 +419,8 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       </section>`}
 
       ${type === 'lokal' && html`<section class="field">
-        <div class="label">Vad kan lokalen användas till?</div>
-        <${ChipPicker} options=${spaceOptions.data || DEFAULT_FUNCTIONS} selected=${functions} onChange=${setFunctions} placeholder="Skriv en användning…" />
+        <div class="label">Vad är det, och vad kan det användas till?</div>
+        <${ChipPicker} options=${spaceOptions.data || DEFAULT_FUNCTIONS} selected=${functions} onChange=${setFunctions} placeholder="T.ex. borrmaskin, kök, släpvagn…" />
         <div class="label">Vad kostar det?</div>
         ${Object.entries(SPACE_COSTS).map(([k, label]) => html`<label class="radio" key=${k}>
           <input type="radio" name="cost" checked=${cost === k} onChange=${() => setCost(k)} /><span>${label}</span></label>`)}
@@ -442,27 +474,28 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       </fieldset>
 
       <section class="field">
-        <div class="label">Bilder</div>
+        <div class="label">Bilder och video</div>
         ${slides.map((sl, i) => html`<div class="slide-edit" key=${sl.key}>
-          <img src=${sl.preview} alt="" />
+          ${sl.media_type === 'video' ? html`<video src=${sl.preview} muted playsinline preload="metadata"></video>` : html`<img src=${sl.preview} alt="" />`}
           <div class="se-main">
-            <textarea rows="3" placeholder=${`Text till bild ${i + 1} (valfritt)`} value=${sl.text} onInput=${(e) => update(i, { text: e.target.value })}></textarea>
+            <textarea rows="3" placeholder=${`Text till ${sl.media_type === 'video' ? 'videon' : 'bild ' + (i + 1)} (valfritt)`} value=${sl.text} onInput=${(e) => update(i, { text: e.target.value })}></textarea>
             <div class="se-actions">
               ${i > 0 && html`<button type="button" class="link" onClick=${() => move(i, -1)}>↑ Flytta upp</button>`}
               <button type="button" class="link danger" onClick=${() => remove(i)}>Ta bort</button>
             </div>
           </div></div>`)}
-        <label class="addimg"><input type="file" accept="image/*" multiple hidden onChange=${addFiles} /><${Icon} name="image" />
-          ${slides.length ? 'Lägg till fler bilder' : 'Lägg till bilder'}</label>
+        <label class="addimg"><input type="file" accept="image/*,video/*" multiple hidden onChange=${addFiles} /><${Icon} name="image" />
+          ${slides.length ? 'Lägg till fler bilder eller video' : 'Lägg till bilder eller video'}</label>
+        <small class="muted">Videor får vara högst 50 MB och spelas upp utan ljud i flödet.</small>
       </section>
 
       <label class="field">Text till inlägget
         <textarea rows="4" value=${caption} onInput=${(e) => setCaption(e.target.value)}
-          placeholder=${{ finansiering: 'Vad kan pengarna sökas för? Vem kan söka?', lokal: 'Var ligger lokalen, när går den att använda och hur bokar man?' }[type] || 'Berätta vad ni gjort, vad ni lärt er eller vad ni behöver…'}></textarea></label>
+          placeholder=${{ finansiering: 'Vad kan pengarna sökas för? Vem kan söka?', lokal: 'Var finns det, när går det att låna och hur bokar man?' }[type] || 'Berätta vad ni gjort, vad ni lärt er eller vad ni behöver…'}></textarea></label>
 
       ${(type === 'vanlig' || type === 'evenemang') && html`<section class="field">
-        <div class="label">Vad relaterar det till? <small class="muted">(valfritt)</small></div>
-        <${ChipPicker} options=${tagOptions.data || []} selected=${tags} onChange=${setTags} placeholder="Skriv ett ämne…" />
+        <div class="label">Taggar <small class="muted">(valfritt)</small></div>
+        <${TagInput} value=${tags} onChange=${setTags} />
       </section>`}
 
       ${err && html`<p class="error">${err}</p>`}

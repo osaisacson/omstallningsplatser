@@ -1,9 +1,9 @@
 // Typ av inlägg.
-export const POST_TYPES = { vanlig: 'Vanlig post', finansiering: 'Tillgänglig finansiering', lokal: 'Lokal att låna eller hyra' };
+export const POST_TYPES = { vanlig: 'Vanlig post', finansiering: 'Tillgänglig finansiering', lokal: 'Resurs att låna eller hyra' };
 export const postType = (p) => p.kind || (p.fin_total != null ? 'finansiering' : 'vanlig');
 
-// Lokaler: vad de kan användas till och vad de kostar.
-export const DEFAULT_FUNCTIONS = ['Verkstad', 'Kök', 'Möteslokal', 'Förråd', 'Odling', 'Ateljé', 'Övernattning'];
+// Resurser (sparas som typen "lokal"): vad det är och vad det kostar. Lokaler, verktyg, maskiner, mark, fordon …
+export const DEFAULT_FUNCTIONS = ['Lokal', 'Verktyg', 'Maskin', 'Fordon', 'Mark', 'Verkstad', 'Kök', 'Möteslokal', 'Förråd', 'Odling', 'Övernattning'];
 export const SPACE_COSTS = { gratis: 'Gratis', gentjanst: 'Mot gentjänst', kostar: 'Kostar' };
 
 // Plats: flödet kan visas för en stadsdel, en stad, en region, ett land eller hela världen.
@@ -229,7 +229,7 @@ export function normalizePostInput(input) {
   }
   if (kind === 'lokal') {
     const functions = clean(input.space?.functions);
-    if (!functions.length) throw new Error('Välj minst en sak lokalen kan användas till.');
+    if (!functions.length) throw new Error('Ange minst en sak som beskriver resursen.');
     const cost = SPACE_COSTS[input.space?.cost] ? input.space.cost : 'gratis';
     space = { functions, cost, price: cost === 'kostar' ? (input.space?.price || '').trim() || null : null };
   }

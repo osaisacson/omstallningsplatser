@@ -2,7 +2,7 @@
 import { html, useState } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshMe, toast } from '../store.js';
-import { Icon, Avatar, Header, PostGrid, GroupRow, Modal, ImagePicker, Loading, ErrorBox, AddressPicker, ReportForm, MoreMenu, editorDelete } from '../ui.js';
+import { Icon, Avatar, Header, PostGrid, GroupRow, Modal, ImagePicker, Loading, ErrorBox, AddressPicker, ReportForm, MoreMenu, VerifiedBadge, editorDelete, linkify } from '../ui.js';
 import { prettyUrl, countryNames } from '../util.js';
 import { AdminRequestForm } from './roles.js';
 import { HomePlaceFields, checkHome, emptyHome } from './place.js';
@@ -62,16 +62,20 @@ export function GroupView({ id }) {
       <span class="profile-more"><${MoreMenu} items=${[
         !admin && !s.me.is_editor && ['Anmäl gruppen', () => setReporting(true)],
         // Redaktionen tar bort härifrån bara när den inte kommer åt gruppens inställningar (där finns Ta bort).
+        s.me.is_editor && !grp.locked && [grp.verified_at ? 'Ta bort verifieringen' : 'Verifiera gruppen', async () => {
+          if (await attempt(() => api.setGroupVerified(id, !grp.verified_at), grp.verified_at ? 'Verifieringen är borttagen' : 'Gruppen är verifierad')) g.reload();
+        }],
+        member && ['Gruppens samtal', async () => { const cid = await attempt(() => api.groupChat(id)); if (cid) go('/samtal/' + cid); }],
         s.me.is_editor && !admin && ['Ta bort gruppen', async () => { if (await editorDelete('group', id, `gruppen ${grp.name} och alla dess inlägg`)) { await refreshMe(); go('/'); } }, 'danger'],
       ]} /></span>
-      <${Avatar} src=${grp.avatar_url} name=${grp.name} size=${84} />
+      <span class=${'group-ring' + (grp.verified_at ? ' verified' : '')} title=${grp.verified_at ? 'Verifierad av Redaktionen' : 'Inte verifierad'}><${Avatar} src=${grp.avatar_url} name=${grp.name} size=${84} /></span>
       <div class="stats">
         <div><b>${list.length}</b><span>inlägg</span></div>
         <div><b>${grp.members.length}</b><span>medlemmar</span></div>
         <div><b>${grp.highlights.length}</b><span>höjdpunkter</span></div>
       </div>
     </div>
-    <div class="profile-info"><strong>${grp.name}</strong>${placeText(grp) && html`<span class="group-place">${placeText(grp)}</span>`}${grp.description && html`<p>${grp.description}</p>`}
+    <div class="profile-info"><strong>${grp.name}</strong>${placeText(grp) && html`<span class="group-place">${placeText(grp)}</span>`}${grp.description && html`<p>${linkify(grp.description)}</p>`}
       ${grp.homepage && html`<a class="homepage" href=${grp.homepage} target="_blank" rel="noopener noreferrer">${prettyUrl(grp.homepage)}</a>`}</div>
     ${!hasAdmin && !grp.locked && html`<div class="nudge admin-nudge">
       <span>${grp.imported_from
@@ -94,7 +98,7 @@ export function GroupView({ id }) {
       ${[...grp.members].sort((a, b) => (b.role === 'admin') - (a.role === 'admin')).map((m) => html`<a class="mini member" href=${'#/profil/' + m.user.id} key=${m.user.id}
         title=${m.role === 'admin' ? `${m.user.name} (admin)` : m.user.name}>
         <span class="member-av"><${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${40} />${m.role === 'admin' && html`<span class="admin-badge" aria-label="admin">★</span>`}</span>
-        <span>${m.user.name.split(' ')[0]}</span></a>`)}
+        <span>${m.user.name.split(' ')[0]}${m.verified && html`<${VerifiedBadge} title="Verifierad medlem" />`}</span></a>`)}
     </div>`}
 
     ${(member || grp.highlights.length > 0) && html`<div class="label pad-x">Höjdpunkter</div>
@@ -197,14 +201,16 @@ export function GroupSettings({ id }) {
     </form>
 
     <div class="label pad-x">Medlemmar och admins</div>
+    <p class="hint pad-x small">Verifiera de medlemmar ni vet är med i gruppen på riktigt – de får en bock bredvid namnet.</p>
     ${!grp.locked && html`<${AddMember} groupId=${id} members=${grp.members} onAdded=${g.reload} />`}
     ${grp.locked ? html`<p class="hint pad">Gruppen är låst: medlemmarna är Redaktionen. Lägg till eller ta bort någon via personens profil (Lägg till i / Ta bort ur Redaktionen).</p>` : html`<div class="list">
       ${grp.members.map((m) => {
         const me = m.user.id === s.me.id;
         return html`<div class="row" key=${m.user.id}>
           <${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${40} />
-          <span class="row-main"><strong>${m.user.name}${me ? ' (du)' : ''}</strong><small class="muted">${m.role === 'admin' ? 'Admin' : 'Medlem'}</small></span>
+          <span class="row-main"><strong>${m.user.name}${me ? ' (du)' : ''}${m.verified && html`<${VerifiedBadge} />`}</strong><small class="muted">${m.role === 'admin' ? 'Admin' : 'Medlem'}${m.verified ? ' · verifierad' : ''}</small></span>
           <span class="btnrow">
+            <button class="btn small" onClick=${() => act(() => api.setMemberVerified(id, m.user.id, !m.verified), m.verified ? 'Verifieringen är borttagen' : `${m.user.name} är verifierad`)}>${m.verified ? 'Ta bort verifiering' : 'Verifiera'}</button>
             ${m.role === 'admin'
               ? html`<button class="btn small" onClick=${() => act(() => api.setMemberRole(id, m.user.id, 'member'), `${m.user.name} är inte längre admin`)}>Ta bort som admin</button>`
               : html`<button class="btn small primary" onClick=${() => act(() => api.setMemberRole(id, m.user.id, 'admin'), `${m.user.name} är nu admin`)}>Gör till admin</button>`}

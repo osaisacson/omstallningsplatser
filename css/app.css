@@ -104,7 +104,7 @@ main { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px); 
 .stories::-webkit-scrollbar { display: none; }
 .story { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 72px; flex: none; }
 .story-ring { display: grid; place-items: center; width: 68px; height: 68px; border-radius: 50%; background: var(--line); }
-.story-ring.fresh { background: linear-gradient(45deg, var(--accent), #8fcf6a, #e6b84a); }
+.story-ring.verified { background: var(--accent); }   /* verifierad av Redaktionen: grön ring, annars grå */
 .story-ring .avatar { border: 2px solid var(--bg); }
 .story-new { width: 68px; height: 68px; border-radius: 50%; border: 1.5px dashed var(--muted); display: grid; place-items: center; font-size: 28px; color: var(--muted); }
 .story-name { font-size: 11.5px; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -411,8 +411,8 @@ fieldset.place-fields legend { padding: 0; margin: 4px 0 4px; }
 .form select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-soft); }
 
 /* ---- Långtidsminnet ---- */
-.post-actions { display: flex; align-items: center; justify-content: space-between; }
-.action.memory { color: var(--muted); }
+.post-actions { display: flex; align-items: center; gap: 18px; }   /* hjärta, kommentarer, dela till vänster – Minne till höger */
+.action.memory { color: var(--muted); margin-left: auto; }
 .action.memory.on { color: var(--accent); }
 .action.memory.on .icon path { fill: currentColor; }
 .memory-search { padding: 0 16px 8px; }
@@ -942,3 +942,47 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .visibility .radio { margin-bottom: 6px; }
 .join-first { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
 .limited { display: block; font-size: 11.5px; color: var(--muted); }
+
+/* Gilla, dela, tid */
+.action.like.on { color: #e0245e; }
+.action.like.on .icon { animation: like-pop .25s ease-out; }
+@keyframes like-pop { 0% { transform: scale(.7); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+.c-meta .action.like { display: inline-flex; align-items: center; gap: 3px; padding: 0; font-size: 12px; color: var(--muted); vertical-align: -2px; }
+.c-meta .action.like.on { color: #e0245e; }
+.who-line { display: flex; align-items: center; gap: 2px; min-width: 0; flex-wrap: wrap; }
+.head-time { color: var(--muted); font-size: 13px; font-weight: 400; white-space: nowrap; }
+.verified-badge { display: inline-grid; place-items: center; color: var(--blue, #3b82f6); margin-left: 3px; vertical-align: -2px; }
+.mini .verified-badge { margin-left: 2px; }
+.auto-link { color: var(--blue, #3b82f6); text-decoration: underline; word-break: break-word; }
+.bubble-row.mine .auto-link { color: #fff; }
+
+/* Video i inlägg */
+.video-wrap { position: relative; width: 100%; height: 100%; background: #000; }
+.video-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.video-sound { position: absolute; right: 10px; bottom: 10px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(0,0,0,.55); color: #fff; }
+.slide-edit video { width: 84px; height: 84px; object-fit: cover; border-radius: 6px; background: #000; flex: none; }
+
+/* Verifierade grupper: grön ring, annars grå */
+.group-ring { display: inline-grid; place-items: center; padding: 3px; border-radius: 50%; background: var(--line); }
+.group-ring.verified { background: var(--accent); }
+.group-ring .avatar { border: 2px solid var(--bg); }
+
+/* Taggar */
+.tag-input { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.tag-input input { flex: 1; min-width: 140px; border: 0; padding: 6px 4px; background: transparent; outline: none; font: inherit; }
+.tag-input .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+.tag-input .chip button { width: 18px; height: 18px; border-radius: 50%; color: inherit; font-size: 14px; line-height: 1; }
+
+/* Samtal */
+.chat-kind { font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.muted-ico { color: var(--muted); display: inline-grid; }
+.bubble-name { font-size: 11.5px; color: var(--muted); margin: 8px 0 2px 10px; }
+.chat-title-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; line-height: 1.15; }
+.chat-title-text small { font-size: 11.5px; }
+.iconbtn.muted-on { color: var(--muted); }
+.new-chat-ico { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.row.pick { cursor: pointer; }
+.row.pick input { width: 20px; height: 20px; accent-color: var(--accent); }
+button.row { width: 100%; text-align: left; }
+.post-actions .memory-wrap { margin-left: auto; }

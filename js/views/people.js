@@ -91,7 +91,7 @@ export function AuthView() {
 // Sök: allt inom området som är valt uppe till vänster (samma som i resten av appen), uppdelat i flikar.
 // Det man skriver begränsar alla flikar samtidigt; siffran på varje flik visar hur många träffar den har.
 const SEARCH_TABS = [['grupper', 'Grupper'], ['folk', 'Folk'], ['poster', 'Poster'], ['finansiering', 'Finansiering'],
-  ['lokaler', 'Lokaler'], ['evenemang', 'Events'], ['minne', 'Minne']];
+  ['lokaler', 'Resurser'], ['evenemang', 'Events'], ['minne', 'Minne']];
 const OLD_TABS = { inlagg: 'poster', personer: 'folk' };
 
 export function Search({ tab: initialTab }) {
@@ -131,7 +131,7 @@ export function Search({ tab: initialTab }) {
   const loading = { grupper: groups, folk: users, evenemang: events }[tab] || posts;
   const items = lists[tab];
   const where = placeLabel(place);
-  const what = { grupper: 'grupper', folk: 'personer', poster: 'poster', finansiering: 'finansiering', lokaler: 'lokaler', evenemang: 'kommande evenemang', minne: 'sparat i minnet' }[tab];
+  const what = { grupper: 'grupper', folk: 'personer', poster: 'poster', finansiering: 'finansiering', lokaler: 'resurser', evenemang: 'kommande evenemang', minne: 'sparat i minnet' }[tab];
   const empty = html`<p class="empty">${needle ? `Inga ${what} i ${where} som matchar ”${dq.trim()}”.` : `Inga ${what} i ${where} än.`}
     ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> uppe till vänster för att söka i ${placeLabel(zoomOut(place))}.</span>`}</p>`;
 

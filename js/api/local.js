@@ -32,6 +32,11 @@ db.feedback ??= [
 ];
 db.feedbackVotes ??= db.feedback.flatMap((f, i) => db.profiles.slice(0, 4 - i * 2).map((p) => ({ feedback_id: f.id, user_id: p.id, value: 1 })));
 db.feedbackComments ??= [];
+db.postLikes ??= [];
+db.commentLikes ??= [];
+db.chats ??= [];
+db.chatMembers ??= [];
+db.chatMessages ??= [];
 function uuid0() { return crypto.randomUUID(); }
 
 const now = () => new Date().toISOString();
@@ -48,6 +53,27 @@ function canSee(p) {
   const me = db.session;
   if (!p.visible_to?.length || p.author_id === me || db.editors.includes(me)) return true;
   return db.members.some((m) => m.user_id === me && p.visible_to.includes(m.group_id));
+}
+// Samtal: med utvalda personer, eller med en hel grupp (alla medlemmar är med).
+function inChat(c, me) { return c.group_id ? !!membership(c.group_id, me) : db.chatMembers.some((m) => m.chat_id === c.id && m.user_id === me); }
+function chatRow(id, me) {
+  let r = db.chatMembers.find((m) => m.chat_id === id && m.user_id === me);
+  if (!r) { r = { chat_id: id, user_id: me, muted: false, last_read_at: membership(db.chats.find((c) => c.id === id)?.group_id, me)?.joined_at || now() }; db.chatMembers.push(r); }
+  return r;
+}
+function chatsFor(me) {
+  return db.chats.filter((c) => inChat(c, me)).map((c) => {
+    const msgs = db.chatMessages.filter((m) => m.chat_id === c.id).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const row = db.chatMembers.find((m) => m.chat_id === c.id && m.user_id === me);
+    const since = row?.last_read_at || membership(c.group_id, me)?.joined_at || c.created_at;
+    const g = c.group_id ? groupOf(c.group_id) : null;
+    const others = db.chatMembers.filter((m) => m.chat_id === c.id && m.user_id !== me).map((m) => profileOf(m.user_id).name).sort((a, b) => a.localeCompare(b, 'sv'));
+    return { id: c.id, title: c.title, group_id: c.group_id, group_name: g?.name || null, group_avatar: g?.avatar_url || null, last_message_at: c.last_message_at,
+      last_body: msgs[0]?.body || null, last_from: msgs[0]?.from_id || null, last_from_name: msgs[0] ? profileOf(msgs[0].from_id).name : null,
+      unread: msgs.filter((m) => m.from_id !== me && m.created_at > since).length, muted: !!row?.muted, member_names: others.join(', '),
+      member_count: c.group_id ? db.members.filter((m) => m.group_id === c.group_id).length : db.chatMembers.filter((m) => m.chat_id === c.id).length };
+  }).filter((c) => !c.group_id || c.last_body || db.chatMembers.some((m) => m.chat_id === c.id && m.user_id === me))
+    .sort((a, b) => b.last_message_at.localeCompare(a.last_message_at));
 }
 function needAdmin(gid) {
   const me = needMe();
@@ -77,6 +103,8 @@ function shapePost(p) {
     rsvp_interested: (db.rsvps || []).filter((r) => r.post_id === p.id && r.status === 'interested').length,
     rsvp_going: (db.rsvps || []).filter((r) => r.post_id === p.id && r.status === 'going').length,
     rsvp_mine: (db.rsvps || []).find((r) => r.post_id === p.id && r.user_id === db.session)?.status || null,
+    like_count: db.postLikes.filter((l) => l.post_id === p.id).length, liked: db.postLikes.some((l) => l.post_id === p.id && l.user_id === db.session),
+    author_verified: !!p.group_id && db.members.some((m) => m.group_id === p.group_id && m.user_id === p.author_id && m.verified),
   });
 }
 function firstComment(cs) {
@@ -134,7 +162,9 @@ async function sha(s) {
 async function buildSlides(slides) {
   const out = [];
   for (const [i, s] of slides.entries()) {
-    out.push({ id: s.id || uuid(), position: i, image_url: s.file ? await storeImage(s.file) : s.image_url, text: (s.text || '').trim() });
+    const video = s.file ? s.file.type.startsWith('video/') : s.media_type === 'video';
+    // Demoläge: en video sparas bara tills sidan laddas om (den ryms inte i webbläsarens lagring).
+    out.push({ id: s.id || uuid(), position: i, media_type: video ? 'video' : 'image', image_url: s.file ? (video ? URL.createObjectURL(s.file) : await storeImage(s.file)) : s.image_url, text: (s.text || '').trim() });
   }
   return out;
 }
@@ -247,7 +277,7 @@ export const api = {
     if (!g) throw new Error('Gruppen finns inte.');
     const members = db.members.filter((m) => m.group_id === id)
       .sort((a, b) => (a.role === b.role ? a.joined_at.localeCompare(b.joined_at) : a.role === 'admin' ? -1 : 1))
-      .map((m) => ({ user: profileOf(m.user_id), role: m.role, joined_at: m.joined_at }));
+      .map((m) => ({ user: profileOf(m.user_id), role: m.role, joined_at: m.joined_at, verified: !!m.verified }));
     const highlights = db.highlights.filter((h) => h.group_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at));
     return clone({ ...g, members, highlights });
   },
@@ -348,7 +378,8 @@ export const api = {
     const post = shapePost(p);
     post.comments = db.comments.filter((c) => c.post_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at))
       .map((c) => ({ ...clone(c), author: profileOf(c.author_id), group: groupOf(c.group_id),
-        payout: c.author_id === me || p.author_id === me ? db.payouts[c.id] ?? null : null }));
+        payout: c.author_id === me || p.author_id === me ? db.payouts[c.id] ?? null : null,
+        like_count: db.commentLikes.filter((l) => l.comment_id === c.id).length, liked: db.commentLikes.some((l) => l.comment_id === c.id && l.user_id === me) }));
     return post;
   },
   async createPost(input) {
@@ -584,6 +615,81 @@ export const api = {
     persist();
   },
 
+  // ---- Gilla ----
+  async likePost(id, on) {
+    const me = needMe();
+    db.postLikes = db.postLikes.filter((l) => !(l.post_id === id && l.user_id === me));
+    if (on) {
+      db.postLikes.push({ post_id: id, user_id: me, created_at: now() });
+      const p = db.posts.find((x) => x.id === id);
+      if (p && p.author_id !== me) notify(p.author_id, 'like', 'gillade ditt inlägg', { actor_id: me, post_id: id });
+    }
+    persist();
+  },
+  async likeComment(id, on) {
+    const me = needMe();
+    db.commentLikes = db.commentLikes.filter((l) => !(l.comment_id === id && l.user_id === me));
+    if (on) db.commentLikes.push({ comment_id: id, user_id: me, created_at: now() });
+    persist();
+  },
+
+  // ---- Verifiering ----
+  async setGroupVerified(id, on) {
+    const me = needMe();
+    if (!db.editors.includes(me)) throw new Error('Bara Redaktionen kan göra det.');
+    const g = db.groups.find((x) => x.id === id);
+    g.verified_at = on ? now() : null; g.verified_by = on ? me : null;
+    log(me, 'group_verify', id, (on ? 'verifierade gruppen ' : 'tog bort verifieringen av ') + g.name);
+    persist();
+  },
+  async setMemberVerified(groupId, userId, on) {
+    const me = needAdmin(groupId);
+    const m = membership(groupId, userId);
+    if (!m) throw new Error('Personen är inte med i gruppen.');
+    m.verified = on;
+    if (on && userId !== me) notify(userId, 'admin', 'verifierade dig som medlem i ' + groupOf(groupId).name, { actor_id: me, group_id: groupId });
+    persist();
+  },
+
+  // ---- Samtal med flera / med en hel grupp ----
+  async listChats() { return clone(chatsFor(needMe())); },
+  async getChat(id) {
+    const me = needMe();
+    const c = db.chats.find((x) => x.id === id);
+    if (!c || !inChat(c, me)) throw new Error('Samtalet finns inte, eller så är du inte med i det.');
+    chatRow(id, me).last_read_at = now(); persist();
+    const members = c.group_id ? db.members.filter((m) => m.group_id === c.group_id).map((m) => profileOf(m.user_id)) : db.chatMembers.filter((m) => m.chat_id === id).map((m) => profileOf(m.user_id));
+    return clone({ ...c, group: c.group_id ? groupOf(c.group_id) : null, members, muted: !!chatRow(id, me).muted,
+      messages: db.chatMessages.filter((m) => m.chat_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((m) => ({ ...m, from: profileOf(m.from_id) })) });
+  },
+  async sendChatMessage(id, body) {
+    const me = needMe();
+    if (!body?.trim()) throw new Error('Skriv något först.');
+    const c = db.chats.find((x) => x.id === id);
+    if (!c || !inChat(c, me)) throw new Error('Du är inte med i samtalet.');
+    const t = now();
+    db.chatMessages.push({ id: uuid(), chat_id: id, from_id: me, body: body.trim(), created_at: t });
+    c.last_message_at = t; chatRow(id, me).last_read_at = t;
+    persist();
+  },
+  async createChat(title, userIds) {
+    const me = needMe();
+    const ids = [...new Set([...userIds, me])];
+    if (ids.length < 2) throw new Error('Välj minst en person.');
+    const c = { id: uuid(), title: (title || '').trim() || null, group_id: null, created_by: me, created_at: now(), last_message_at: now() };
+    db.chats.push(c);
+    for (const u of ids) db.chatMembers.push({ chat_id: c.id, user_id: u, muted: false, last_read_at: now() });
+    persist();
+    return c.id;
+  },
+  async groupChat(groupId) {
+    const me = needMember(groupId);
+    let c = db.chats.find((x) => x.group_id === groupId);
+    if (!c) { c = { id: uuid(), title: null, group_id: groupId, created_by: me, created_at: now(), last_message_at: now() }; db.chats.push(c); persist(); }
+    return c.id;
+  },
+  async setChatMuted(id, muted) { chatRow(id, needMe()).muted = muted; persist(); },
+
   // ---- Redaktionen ----
   async listEditors() {
     return { editors: db.editors.map(profileOf), groupId: db.groups.find((g) => g.name === 'Omställningsplatser')?.id || null };
@@ -755,7 +861,7 @@ export const api = {
     const mine = new Set(db.posts.filter((p) => p.author_id === me).map((p) => p.id));
     return {
       notifications: db.notifications.filter((n) => n.user_id === me && !n.read).length,
-      messages: db.messages.filter((m) => m.to_id === me && !m.read).length,
+      messages: db.messages.filter((m) => m.to_id === me && !m.read).length + chatsFor(me).filter((c) => !c.muted).reduce((n, c) => n + c.unread, 0),
       todos: db.comments.filter((c) => mine.has(c.post_id) && (c.status === 'granted' || c.status === 'applied')).length
         + (db.editors.includes(me) ? db.reports.filter((r) => !r.done_at).length + db.adminRequests.filter((r) => r.status === 'pending').length : 0),
     };

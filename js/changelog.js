@@ -2,6 +2,14 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-24T21:35', 'Gilla inlägg och kommentarer med ett hjärta.'],
+  ['2026-11-24T21:35', 'Dela inlägg med en länk.'],
+  ['2026-11-24T21:35', 'Lägg upp video – den spelas upp utan ljud när du scrollar förbi.'],
+  ['2026-11-24T21:35', 'Samtal med flera personer, eller med en hel grupp. Stäng av notiserna med klockan.'],
+  ['2026-11-24T21:35', 'Redaktionen verifierar grupper (grön ring) och admins verifierar medlemmar (bock).'],
+  ['2026-11-24T21:35', 'Lokaler heter nu Resurser – det kan vara verktyg, maskiner, mark och annat.'],
+  ['2026-11-24T21:35', 'Taggar skriver du fritt. Länkar blir klickbara. Tiden syns vid namnet.'],
+  ['2026-11-24T21:35', 'Du kommer tillbaka till samma ställe i flödet när du lämnar ett inlägg.'],
   ['2026-11-24T07:45', 'Inlägg visar vilken grupp de handlar om: ”om Sjöbergen” i stället för ”i Sjöbergen”.'],
   ['2026-11-23T11:08', 'När du postar väljer du bland dina grupper – eller söker upp en annan och går med direkt.'],
   ['2026-11-23T11:08', 'Välj vem som ser inlägget: alla, eller bara vissa grupper. Det går att ändra efteråt.'],

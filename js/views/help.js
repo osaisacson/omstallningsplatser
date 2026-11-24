@@ -33,7 +33,7 @@ export const Terms = () => html`<div class="prose">
     <li><b>Du måste vara minst 13 år</b> för att skapa ett konto.</li>
     <li><b>Du ansvarar för det du lägger upp.</b> Lägg bara upp sådant du har rätt att dela, och fråga innan du lägger upp bilder där andra syns.</li>
     <li><b>Inget olagligt, hatiskt, hotfullt eller trakasserande</b>, ingen spam och inga andras personuppgifter utan lov.</li>
-    <li><b>Finansiering och lokaler</b> avtalas direkt mellan grupperna. Plattformen hanterar inga pengar och ansvarar inte för överenskommelser mellan användare.</li>
+    <li><b>Finansiering och resurser</b> avtalas direkt mellan grupperna. Plattformen hanterar inga pengar och ansvarar inte för överenskommelser mellan användare.</li>
     <li><b>Redaktionen</b> kan ta bort inlägg, grupper och konton som bryter mot villkoren.</li>
     <li>Du kan när som helst radera ditt konto. Då försvinner din profil, dina inlägg, kommentarer och meddelanden.</li>
     <li>Ändras villkoren meddelar vi det i appen.</li>
