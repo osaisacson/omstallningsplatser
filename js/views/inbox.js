@@ -122,18 +122,20 @@ const dayLabel = (iso) => {
 };
 const clock = (iso) => new Date(iso).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
 
-// Reaktioner på meddelanden: tryck på en bubbla för att välja en emoji (dubbeltryck ger ett hjärta).
+// Reaktioner på meddelanden: tryck på en bubbla för hjärta eller tumme upp – eller + för fler (dubbeltryck ger ett hjärta).
 // Reaktionerna visas under bubblan; tryck på en för att lägga till eller ta bort din egen.
-const REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
+const QUICK = ['❤️', '👍'];
+const MORE = ['😂', '😮', '😢', '🙏', '🙌', '👏', '🔥', '🎉', '💚', '🌱', '🌍', '☀️', '🌻', '🍅', '🐝', '💪', '🤝', '👀', '🤔', '😅', '😍', '🥰', '😊', '🙂', '😎', '😴', '🤗', '🥳', '✅', '❗', '❓', '💡', '📅', '🏡', '🛠️', '🚲'];
 function Bubble({ kind, m, mine, tail }) {
   const me = state.me?.id;
   const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);   // + visar fler emojis
   const [rs, setRs] = useState(m.reactions || []);
   const wrap = useRef();
   useEffect(() => setRs(m.reactions || []), [m.reactions]);
   useEffect(() => {
     if (!open) return;
-    const close = (e) => { if (!wrap.current?.contains(e.target)) setOpen(false); };
+    const close = (e) => { if (!wrap.current?.contains(e.target)) { setOpen(false); setAll(false); } };
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
   }, [open]);
@@ -141,7 +143,7 @@ function Bubble({ kind, m, mine, tail }) {
     const has = rs.some((r) => r.user_id === me && r.emoji === emoji);
     const before = rs;
     setRs(has ? rs.filter((r) => !(r.user_id === me && r.emoji === emoji)) : [...rs, { user_id: me, emoji }]);
-    setOpen(false);
+    setOpen(false); setAll(false);
     try { await api.react(kind, m.id, emoji, !has); } catch (e) { setRs(before); toast(e.message); }
   }
   const groups = [];
@@ -152,8 +154,10 @@ function Bubble({ kind, m, mine, tail }) {
   }
   return html`<div class=${'bubble-row' + (mine ? ' mine' : '')}>
     <div class="bubble-wrap" ref=${wrap}>
-      ${open && html`<div class="react-picker" role="menu" aria-label="Reagera">${REACTIONS.map((e) => html`<button type="button" role="menuitem"
-        class=${rs.some((r) => r.user_id === me && r.emoji === e) ? 'on' : ''} onClick=${() => toggle(e)} aria-label=${`Reagera med ${e}`}>${e}</button>`)}</div>`}
+      ${open && html`<div class=${'react-picker' + (all ? ' all' : '')} role="menu" aria-label="Reagera">
+        ${(all ? [...QUICK, ...MORE] : QUICK).map((e) => html`<button type="button" role="menuitem" key=${e}
+          class=${rs.some((r) => r.user_id === me && r.emoji === e) ? 'on' : ''} onClick=${() => toggle(e)} aria-label=${`Reagera med ${e}`}>${e}</button>`)}
+        ${!all && html`<button type="button" class="react-more" aria-label="Fler emojis" onClick=${() => setAll(true)}>+</button>`}</div>`}
       <div class=${'bubble' + (tail ? ' tail' : '')} title="Tryck för att reagera" onClick=${() => setOpen((o) => !o)} onDblClick=${(e) => { e.preventDefault(); toggle('❤️'); }}>${linkify(m.body)}</div>
       ${groups.length > 0 && html`<div class="reactions">${groups.map((g) => html`<button type="button" key=${g.emoji} class=${'react-chip' + (g.mine ? ' on' : '')}
         onClick=${() => toggle(g.emoji)} aria-label=${`${g.emoji} ${g.n}${g.mine ? ', du har reagerat' : ''}`}>${g.emoji}${g.n > 1 ? html`<span>${g.n}</span>` : ''}</button>`)}</div>`}

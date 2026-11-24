@@ -2,13 +2,16 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-24T22:17', 'Reagera med hjärta eller tumme upp – eller + för fler emojis.'],
+  ['2026-11-24T22:17', 'Videor spelar med ljudet avstängt; slår du på det gäller det alla videor.'],
+  ['2026-11-24T22:17', 'Verifierade personer har en bock på profilen, och verifierade grupper en grön ring.'],
   ['2026-11-24T22:10', 'Reagera med en emoji på meddelanden: tryck på ett meddelande, eller dubbeltryck för ett hjärta.'],
   ['2026-11-24T22:04', 'Höjdpunkter heter nu Projekt och kan ha en beskrivning med länkar.'],
   ['2026-11-24T21:55', 'Nämn någon med @ i inlägg och kommentarer – personen får en notis.'],
   ['2026-11-24T21:51', 'Beskär och zooma bilder när du lägger upp dem: dra för att flytta, nyp eller använd reglaget för att zooma.'],
   ['2026-11-24T21:35', 'Gilla inlägg och kommentarer med ett hjärta.'],
   ['2026-11-24T21:35', 'Dela inlägg med en länk.'],
-  ['2026-11-24T21:35', 'Lägg upp video – den spelas upp utan ljud när du scrollar förbi.'],
+  ['2026-11-24T21:35', 'Lägg upp video – den spelar när du scrollar förbi, och ljudet slår du på med knappen.'],
   ['2026-11-24T21:35', 'Samtal med flera personer, eller med en hel grupp. Stäng av notiserna med klockan.'],
   ['2026-11-24T21:35', 'Redaktionen verifierar grupper (grön ring) och admins verifierar medlemmar (bock).'],
   ['2026-11-24T21:35', 'Lokaler heter nu Resurser – det kan vara verktyg, maskiner, mark och annat.'],

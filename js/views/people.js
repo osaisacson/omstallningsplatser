@@ -3,7 +3,7 @@ import { html, useState, useEffect } from '../lib.js';
 import { api } from '../api/index.js';
 import { APP_NAME, AUTH_PROVIDERS, VAPID_PUBLIC_KEY } from '../config.js';
 import { useStore, useAsync, go, attempt, refreshMe, refreshBadges, setState, toast } from '../store.js';
-import { Icon, Count, Avatar, Header, PostGrid, GroupRow, UserRow, ImagePicker, Loading, ErrorBox, ReportForm, MoreMenu, editorDelete } from '../ui.js';
+import { Icon, Count, Avatar, Header, PostGrid, GroupRow, UserRow, ImagePicker, Loading, ErrorBox, ReportForm, MoreMenu, VerifiedBadge, editorDelete } from '../ui.js';
 import { Terms } from './help.js';
 import { AddEditorConfirm } from './roles.js';
 import { HomePlaceFields, checkHome, emptyHome, PlaceSwitcher } from './place.js';
@@ -161,7 +161,7 @@ function GroupIcons({ groups, canAdd }) {
   return html`<div class="group-icons" onScroll=${more} aria-label="Grupper">
     ${canAdd && html`<a class="group-add" href="#/valkommen" title="Gå med i eller skapa en grupp" aria-label="Gå med i eller skapa en grupp">+</a>`}
     ${groups.slice(0, shown).map((g) => html`<a href=${'#/grupp/' + g.id} key=${g.id} title=${g.name + (g.role === 'admin' ? ' (admin)' : '')}>
-      <${Avatar} src=${g.avatar_url} name=${g.name} size=${44} /></a>`)}
+      <span class=${'group-ring small' + (g.verified_at ? ' verified' : '')}><${Avatar} src=${g.avatar_url} name=${g.name} size=${40} /></span></a>`)}
   </div>`;
 }
 
@@ -198,7 +198,7 @@ export function Profile({ id }) {
         <div><b>${user.groups.length}</b><span>grupper</span></div>
       </div>
     </div>
-    <div class="profile-info"><strong>${user.name}</strong>
+    <div class="profile-info"><strong>${user.name}${user.verified_in?.length > 0 && html`<${VerifiedBadge} title=${`Verifierad i ${user.verified_in.join(', ')}`} />`}</strong>
       ${user.is_editor && html`<a class="role-badge" href="#/hjalp" title="Redaktionen modererar plattformen">Redaktionen</a>`}</div>
     ${(isMe || user.groups.length > 0) && html`<${GroupIcons} groups=${user.groups} canAdd=${isMe} />`}
     ${!isMe && html`<div class="profile-actions">

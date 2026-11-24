@@ -45,12 +45,18 @@ async function uploadVideo(file) {
   return sb.storage.from('media').getPublicUrl(path).data.publicUrl;
 }
 // Märker vilka författare som är verifierade medlemmar i inläggets grupp.
+// Verifierad = verifierad medlem i inläggets grupp, eller med i Redaktionen (som alltid är verifierad).
+let editorIds = null;
 async function markVerified(posts) {
+  if (!posts.length) return posts;
   const gids = [...new Set(posts.map((p) => p.group_id).filter(Boolean))];
-  if (!gids.length) return posts;
-  const rows = ok(await sb.from('group_members').select('group_id, user_id').in('group_id', gids).eq('verified', true));
+  if (!editorIds) editorIds = sb.from('group_members').select('user_id, group:groups!inner(locked)').eq('group.locked', true).then((r) => new Set((r.data || []).map((x) => x.user_id)), () => new Set());
+  const [rows, eds] = await Promise.all([
+    gids.length ? sb.from('group_members').select('group_id, user_id').in('group_id', gids).eq('verified', true).then(ok) : [],
+    editorIds,
+  ]);
   const v = new Set(rows.map((r) => r.group_id + '|' + r.user_id));
-  for (const p of posts) p.author_verified = !!p.group_id && v.has(p.group_id + '|' + p.author_id);
+  for (const p of posts) p.author_verified = eds.has(p.author_id) || (!!p.group_id && v.has(p.group_id + '|' + p.author_id));
   return posts;
 }
 async function upload(file, max = 1280) {
@@ -183,11 +189,12 @@ export const api = {
     return ok(await query);
   },
   async getUser(id) {
-    const p = ok(await sb.from('profiles').select(`${PROFILE}, nickname, created_at, group_members!group_members_user_id_fkey(role, group:groups(id,name,avatar_url))`).eq('id', id).single());
+    const p = ok(await sb.from('profiles').select(`${PROFILE}, nickname, created_at, group_members!group_members_user_id_fkey(role, verified, group:groups(id,name,avatar_url,verified_at,locked))`).eq('id', id).single());
     const { group_members, ...rest } = p;
     const ed = ok(await sb.from('editors').select('accepted_at').eq('user_id', id))[0];
     const editor = !!ed?.accepted_at;
-    return { ...rest, is_editor: editor, editor_invited: !!ed && !ed.accepted_at, groups: group_members.map((m) => ({ ...m.group, role: m.role })) };
+    return { ...rest, is_editor: editor, editor_invited: !!ed && !ed.accepted_at, groups: group_members.map((m) => ({ ...m.group, role: m.role, member_verified: m.verified })),
+      verified_in: group_members.filter((m) => m.verified).map((m) => m.group?.name).filter(Boolean) };
   },
 
   // ---- Grupper ----

@@ -494,7 +494,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
           file=${slides[cropping].file} src=${slides[cropping].file ? null : slides[cropping].image_url}
           onCancel=${() => setCropping(null)}
           onDone=${(file) => { update(cropping, { file, preview: URL.createObjectURL(file), media_type: 'image' }); setCropping(null); }} />`}
-        <small class="muted">Videor får vara högst 50 MB och spelas upp utan ljud i flödet.</small>
+        <small class="muted">Videor får vara högst 50 MB. De spelar när de syns i flödet; ljudet slår man på med knappen på videon.</small>
       </section>
 
       <label class="field">Text till inlägget

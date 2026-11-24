@@ -107,9 +107,9 @@ export function Carousel({ slides, badge = null }) {
   </div>`;
 }
 
-// Video i ett inlägg: börjar spela (utan ljud) när den syns på skärmen och pausar när man scrollar förbi.
-// Ljudet slås på med knappen i hörnet; valet gäller sedan alla videor tills sidan laddas om.
-let soundOn = false;
+// Video i ett inlägg: börjar spela när den syns på skärmen och pausar när man scrollar förbi.
+// Ljudet är avstängt från början. Slår man på (eller av) det med knappen gäller valet alla videor, och sparas till nästa gång.
+let soundOn = (() => { try { return localStorage.getItem('video-sound') === 'on'; } catch { return false; } })();
 const soundListeners = new Set();
 export function AutoVideo({ src, active = true, label }) {
   const ref = useRef();
@@ -120,13 +120,20 @@ export function AutoVideo({ src, active = true, label }) {
     const v = ref.current;
     if (!v) return;
     const io = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && e.intersectionRatio >= 0.6 && active) v.play().catch(() => {});
+      // Webbläsaren kan vägra spela med ljud innan man rört sidan – då spelar videon tyst i stället.
+      if (e.isIntersecting && e.intersectionRatio >= 0.6 && active) v.play().catch(() => { v.muted = true; setMuted(true); v.play().catch(() => {}); });
       else v.pause();
     }, { threshold: [0, 0.6, 1] });
     io.observe(v);
     return () => io.disconnect();
   }, [active]);
-  const toggle = (e) => { e.stopPropagation(); soundOn = muted; soundListeners.forEach((l) => l(soundOn)); };
+  const toggle = (e) => {
+    e.stopPropagation();
+    soundOn = muted;
+    try { localStorage.setItem('video-sound', soundOn ? 'on' : 'off'); } catch { /* går bra utan */ }
+    soundListeners.forEach((l) => l(soundOn));
+    if (soundOn) ref.current?.play().catch(() => {});
+  };
   return html`<div class="video-wrap">
     <video ref=${ref} src=${src} muted playsinline loop preload="metadata" aria-label=${label || 'Video'} onClick=${toggle}></video>
     <button class="video-sound" aria-label=${muted ? 'Slå på ljudet' : 'Stäng av ljudet'} onClick=${toggle}><${Icon} name=${muted ? 'volumeOff' : 'volumeOn'} size=${18} /></button>

@@ -119,7 +119,7 @@ function shapePost(p) {
     rsvp_going: (db.rsvps || []).filter((r) => r.post_id === p.id && r.status === 'going').length,
     rsvp_mine: (db.rsvps || []).find((r) => r.post_id === p.id && r.user_id === db.session)?.status || null,
     like_count: db.postLikes.filter((l) => l.post_id === p.id).length, liked: db.postLikes.some((l) => l.post_id === p.id && l.user_id === db.session),
-    author_verified: !!p.group_id && db.members.some((m) => m.group_id === p.group_id && m.user_id === p.author_id && m.verified),
+    author_verified: db.members.some((m) => m.user_id === p.author_id && m.verified && (m.group_id === p.group_id || db.groups.find((g) => g.id === m.group_id)?.locked)),
   });
 }
 function firstComment(cs) {
@@ -259,7 +259,8 @@ export const api = {
     const p = db.profiles.find((x) => x.id === id);
     if (!p) throw new Error('Användaren finns inte.');
     return clone({ ...profileOf(id), nickname: p.nickname || null, created_at: p.created_at, is_editor: db.editors.includes(id),
-      groups: db.members.filter((m) => m.user_id === id).map((m) => ({ ...groupOf(m.group_id), role: m.role })) });
+      groups: db.members.filter((m) => m.user_id === id).map((m) => { const g = db.groups.find((x) => x.id === m.group_id); return { ...groupOf(m.group_id), verified_at: g?.verified_at || null, locked: !!g?.locked, role: m.role, member_verified: !!m.verified }; }),
+      verified_in: db.members.filter((m) => m.user_id === id && m.verified).map((m) => groupOf(m.group_id)?.name).filter(Boolean) });
   },
 
   // ---- Grupper ----
