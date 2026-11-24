@@ -3,7 +3,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshBadges, refreshMe, onRefresh } from '../store.js';
 import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal, MentionField } from '../ui.js';
-import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, postVisibleAt, regionName, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut } from '../util.js';
+import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, postVisibleAt, regionName, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut, lookupPostcode } from '../util.js';
 
 import { InstallHint } from '../install.js';
 import { CHANGES } from '../changelog.js';
@@ -320,6 +320,18 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   // Plats för inlägg utan grupp (förifylld med ens egen plats).
   const [where, setWhere] = useState(() => (s.me.home ? { ...emptyHome(), ...s.me.home, district: null } : emptyHome()));
   const placeGroups = useAsync(() => api.listGroups(), []);
+  // Förvalt: den grupp man postat mest i (om man inte kommit från en grupp eller redigerar).
+  const groupTouched = useRef(!!initialGroup || editing);
+  const myPosts = useAsync(() => (groupTouched.current ? Promise.resolve([]) : api.listPosts({ authorId: s.me.id, limit: 200 })), []);
+  useEffect(() => {
+    if (groupTouched.current || !myPosts.data?.length) return;
+    const n = {};
+    for (const p of myPosts.data) if (p.group_id && s.memberOf.has(p.group_id)) n[p.group_id] = (n[p.group_id] || 0) + 1;
+    const best = Object.entries(n).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (best) setGroupId(best);
+  }, [myPosts.data]);
+  const [addingGroup, setAddingGroup] = useState(false);
+  const [distName, setDistName] = useState(null);
   const [tags, setTags] = useState([]);
   const [functions, setFunctions] = useState([]);
   const [cost, setCost] = useState('gratis');
@@ -364,16 +376,27 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   // Räckvidd: från inläggets plats (gruppens, eller den man angett) och utåt. Första valet är där det hör hemma.
   const homePl = isPersonal ? where : (placeGroups.data || []).find((g) => g.id === groupId) || myGroups.find((g) => g.id === groupId) || {};
   const reachOptions = [
-    homePl.postcode && ['district', homePl.district || 'Stadsdelen'],
+    homePl.postcode && ['district', distName || homePl.district || 'Stadsdelen'],
     homePl.city && ['city', homePl.city],
     homePl.region && ['region', regionName(homePl.region)],
-    homePl.country && ['country', homePl.country === 'Sverige' ? 'Hela Sverige' : homePl.country],
+    homePl.country && ['country', 'Hela landet'],
   ].filter(Boolean);
   if (!reachOptions.length) reachOptions.push(['city', 'Platsen']);
+  // Stadsdelens namn slås upp från postnumret (t.ex. 414 62 → Stigberget).
+  useEffect(() => {
+    setDistName(null);
+    if (!homePl.postcode) return;
+    let alive = true;
+    lookupPostcode(homePl.postcode, homePl.city || '').then((h) => { if (alive && h?.district) setDistName(h.district); }, () => {});
+    return () => { alive = false; };
+  }, [homePl.postcode]);
+  // Grupperna som "bara gruppen" gäller: de valda, eller inläggets grupp.
+  const groupById = (id) => (placeGroups.data || []).find((g) => g.id === id) || myGroups.find((g) => g.id === id);
+  const onlyGroups = (limit && visibleTo.length ? visibleTo : groupId && !isPersonal ? [groupId] : []).map(groupById).filter(Boolean);
   // Byter man grupp kan räckvidden sakna motsvarighet – då gäller grundvalet.
   const reachNow = reachOptions.some(([l]) => l === reach) ? reach : null;
   const reachLvl = reachNow || reachOptions[0][0];
-  const reachIn = { district: homePl.district ? `i ${homePl.district}` : 'i stadsdelen', city: `i ${homePl.city}`, region: `i ${regionName(homePl.region)}`, country: `i hela ${homePl.country}` }[reachLvl] || 'här';
+  const reachIn = { district: (distName || homePl.district) ? `i ${distName || homePl.district}` : 'i stadsdelen', city: `i ${homePl.city}`, region: `i ${regionName(homePl.region)}`, country: `i hela ${homePl.country}` }[reachLvl] || 'här';
   const reachHint = reachLvl === 'country' ? `Syns i flödet ${reachIn}.` : `Syns i flödet ${reachIn} – och för den som zoomar ut.`;
   const update = (i, patch) => setSlides((xs) => xs.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const remove = (i) => setSlides((xs) => xs.filter((_, j) => j !== i));
@@ -483,14 +506,14 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
 
       <div class="settings-block-c">
         <div class="set-row">
-          <div class="set-label">Grupp</div>
+          <div class="set-label">Relaterar till</div>
           <div class="set-body">
         ${noGroups ? html`<div class="nudge">
             <strong>Du är inte med i någon grupp än.</strong>
             <p>Inlägg ska helst höra till en grupp. Gå med i en grupp eller skapa en ny.</p>
             <div class="btnrow"><a class="btn small" href="#/sok?flik=grupper">Hitta grupper</a><a class="btn small primary" href="#/ny-grupp?next=/ny">Skapa grupp</a></div>
           </div>`
-        : html`${!isPersonal && html`<${GroupPicker} groups=${myGroups} others=${placeGroups.data || []} value=${groupId} onChange=${(id) => { setGroupId(id); setPersonal(false); }} />`}
+        : html`${!isPersonal && html`<${GroupPicker} groups=${myGroups} others=${placeGroups.data || []} value=${groupId} onChange=${(id) => { groupTouched.current = true; setGroupId(id); setPersonal(false); }} />`}
           ${!isPersonal && groupId && !s.memberOf.has(groupId) && (() => { const g = (placeGroups.data || []).find((x) => x.id === groupId); return html`<div class="nudge join-first">
             <span>Du är inte med i <b>${g?.name || 'gruppen'}</b>. Gå med för att kunna posta där.</span>
             <button type="button" class="btn small primary" disabled=${joining} onClick=${async () => {
@@ -513,14 +536,19 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
           <div class="set-label">Relevant för</div>
           <div class="set-body">
             <div class="reach-pills" role="radiogroup" aria-label="Vilka är inlägget relevant för?">
-              ${reachOptions.map(([lvl, label]) => html`<button type="button" role="radio" key=${lvl}
+              ${[...reachOptions].reverse().map(([lvl, label]) => html`<button type="button" role="radio" key=${lvl}
                 aria-checked=${!limit && (reachNow || reachOptions[0][0]) === lvl} class=${!limit && (reachNow || reachOptions[0][0]) === lvl ? 'on' : ''}
                 onClick=${() => { setLimit(false); setReach(lvl === reachOptions[0][0] ? null : lvl); }}>${label}</button>`)}
-              <button type="button" role="radio" aria-checked=${limit} class=${limit ? 'on' : ''}
-                onClick=${() => { setLimit(true); if (!visibleTo.length && !isPersonal && groupId) setVisibleTo([groupId]); }}>Valda grupper</button>
+              ${(onlyGroups.length > 0 || !isPersonal) && html`<span class=${'reach-groups' + (limit ? ' on' : '')}>
+                <button type="button" role="radio" aria-checked=${limit} class="rg-avatars" title="Bara gruppens medlemmar"
+                  aria-label=${`Bara ${onlyGroups.map((g) => g.name).join(', ') || 'gruppen'}`} onClick=${() => { setLimit(true); if (!visibleTo.length && groupId) setVisibleTo([groupId]); }}>
+                  ${onlyGroups.map((g) => html`<${Avatar} key=${g.id} src=${g.avatar_url} name=${g.name} size=${30} />`)}</button>
+                <button type="button" class="rg-add" aria-label="Lägg till en grupp till" title="Lägg till en grupp till"
+                  onClick=${() => { setLimit(true); if (!visibleTo.length && groupId) setVisibleTo([groupId]); setAddingGroup(true); }}>+</button>
+              </span>`}
             </div>
-            <small class="muted">${limit ? 'Bara medlemmar i grupperna du väljer ser inlägget.' : reachHint}</small>
-            ${limit && html`<${GroupsPicker} groups=${myGroups} others=${placeGroups.data || []} value=${visibleTo} onChange=${setVisibleTo} />`}
+            <small class="muted">${limit ? `Bara medlemmar i ${onlyGroups.map((g) => g.name).join(', ') || 'gruppen'} ser inlägget.` : reachHint}</small>
+            ${limit && addingGroup && html`<${GroupsPicker} groups=${myGroups} others=${placeGroups.data || []} value=${visibleTo} onChange=${setVisibleTo} />`}
           </div>
         </div>
 

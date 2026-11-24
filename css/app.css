@@ -1075,3 +1075,13 @@ button.row { width: 100%; text-align: left; }
 .reach-pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .reach-pills button { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--muted); background: var(--bg); }
 .reach-pills button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Relaterar till / Relevant för: rubriken på egen rad */
+.set-row { grid-template-columns: 1fr; gap: 6px; }
+.set-label { padding-top: 0; }
+.reach-pills { align-items: center; }
+.reach-groups { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 2px; border-radius: 999px; border: 1px solid var(--line); }
+.reach-groups.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.rg-avatars { display: inline-flex; padding: 0 !important; border: 0 !important; background: none !important; }
+.rg-avatars .avatar + .avatar { margin-left: -10px; border: 2px solid var(--bg); }
+.rg-add { width: 30px; height: 30px; border-radius: 50%; border: 1.5px dashed var(--line) !important; color: var(--muted); font-size: 17px; line-height: 1; display: grid; place-items: center; padding: 0 !important; background: var(--bg) !important; }
