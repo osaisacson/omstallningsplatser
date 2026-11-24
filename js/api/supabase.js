@@ -61,7 +61,7 @@ async function upload(file, max = 1280) {
 }
 
 const PROFILE = 'id,name,avatar_url';
-const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text,media_type), post_likes(user_id), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles(id,name),group:groups(id,name)), memory_votes(user_id,theme,themes,created_at), event_rsvps(user_id,status)`;
+const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text,media_type), post_likes(user_id), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles!comments_author_id_fkey(id,name),group:groups(id,name)), memory_votes(user_id,theme,themes,created_at), event_rsvps(user_id,status)`;
 
 function shapePost(p) {
   const cs = p.comments || [];
@@ -183,7 +183,7 @@ export const api = {
     return ok(await query);
   },
   async getUser(id) {
-    const p = ok(await sb.from('profiles').select(`${PROFILE}, nickname, created_at, group_members(role, group:groups(id,name,avatar_url))`).eq('id', id).single());
+    const p = ok(await sb.from('profiles').select(`${PROFILE}, nickname, created_at, group_members!group_members_user_id_fkey(role, group:groups(id,name,avatar_url))`).eq('id', id).single());
     const { group_members, ...rest } = p;
     const ed = ok(await sb.from('editors').select('accepted_at').eq('user_id', id))[0];
     const editor = !!ed?.accepted_at;
@@ -204,7 +204,7 @@ export const api = {
     return rows.map((r) => ({ ...r.group, role: r.role })).sort((a, b) => a.name.localeCompare(b.name, 'sv'));
   },
   async getGroup(id) {
-    const g = ok(await sb.from('groups').select(`*, group_members(role, joined_at, verified, user:profiles(${PROFILE})), highlights(*)`).eq('id', id).single());
+    const g = ok(await sb.from('groups').select(`*, group_members(role, joined_at, verified, user:profiles!group_members_user_id_fkey(${PROFILE})), highlights(*)`).eq('id', id).single());
     const { group_members, highlights, ...rest } = g;
     return {
       ...rest,
@@ -261,7 +261,7 @@ export const api = {
   async getPost(id) {
     const p = ok(await sb.from('posts').select(POST_SELECT).eq('id', id).maybeSingle());
     if (!p) throw new Error('Inlägget finns inte (längre).');
-    const comments = ok(await sb.from('comments').select(`*, author:profiles(${PROFILE}), group:groups(id,name,avatar_url), comment_likes(user_id)`).eq('post_id', id).order('created_at'));
+    const comments = ok(await sb.from('comments').select(`*, author:profiles!comments_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url), comment_likes(user_id)`).eq('post_id', id).order('created_at'));
     const ids = comments.filter((c) => c.status).map((c) => c.id);
     const payouts = ids.length ? ok(await sb.from('payouts').select('*').in('comment_id', ids)) : [];
     const byId = Object.fromEntries(payouts.map((x) => [x.comment_id, x.details]));
@@ -356,7 +356,7 @@ export const api = {
   async markPaid(commentId) { ok(await sb.rpc('mark_paid', { p_comment: commentId })); },
   async listTodos() {
     const rows = ok(await sb.from('comments')
-      .select(`*, author:profiles(${PROFILE}), group:groups(id,name,avatar_url), post:posts!inner(id, caption, author_id, group:groups(id,name,avatar_url))`)
+      .select(`*, author:profiles!comments_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url), post:posts!inner(id, caption, author_id, group:groups(id,name,avatar_url))`)
       .in('status', ['applied', 'granted', 'paid']).eq('post.author_id', needMe()).order('decided_at', { ascending: false }));
     const payouts = rows.length ? ok(await sb.from('payouts').select('*').in('comment_id', rows.map((r) => r.id))) : [];
     const byId = Object.fromEntries(payouts.map((x) => [x.comment_id, x.details]));
@@ -414,9 +414,9 @@ export const api = {
   // ---- Samtal med flera / med en hel grupp ----
   async listChats() { return ok(await sb.rpc('my_chats')); },
   async getChat(id) {
-    const chat = ok(await sb.from('chats').select('*, group:groups(id,name,avatar_url), chat_members(user_id, muted, user:profiles(' + PROFILE + '))').eq('id', id).maybeSingle());
+    const chat = ok(await sb.from('chats').select('*, group:groups(id,name,avatar_url), chat_members(user_id, muted, user:profiles!chat_members_user_id_fkey(' + PROFILE + '))').eq('id', id).maybeSingle());
     if (!chat) throw new Error('Samtalet finns inte, eller så är du inte med i det.');
-    const msgs = ok(await sb.from('chat_messages').select(`*, from:profiles(${PROFILE})`).eq('chat_id', id).order('created_at').limit(500));
+    const msgs = ok(await sb.from('chat_messages').select(`*, from:profiles!chat_messages_from_id_fkey(${PROFILE})`).eq('chat_id', id).order('created_at').limit(500));
     sb.rpc('mark_chat_read', { p_chat: id }).then(() => {}, () => {});
     const { chat_members: cm = [], ...c } = chat;
     return { ...c, members: cm.map((m) => m.user).filter(Boolean), muted: !!cm.find((m) => m.user_id === meId)?.muted, messages: msgs };

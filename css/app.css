@@ -741,8 +741,8 @@ a.todo small { display: block; }
 .fb-status-set .seg button { padding: 6px 14px; font-size: 13px; }
 /* Sök: område överst, flikar som går att scrolla i sidled */
 .search-hint { margin: 2px 16px 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
-.search-tabs { justify-content: flex-start; scroll-snap-type: x proximity; }
-.search-tabs button { flex: 0 0 auto; padding-inline: 12px; scroll-snap-align: start; }
+.search-tabs { justify-content: flex-start; }
+.search-tabs button { flex: 0 0 auto; padding-inline: 12px; }
 .place-what { white-space: nowrap; }
 .search-page .searchbar { position: static; padding-top: 2px; }
 .cal-setting { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -986,3 +986,6 @@ main[data-ptr="back"], main[data-ptr="busy"] { transition: transform .32s cubic-
 .row.pick input { width: 20px; height: 20px; accent-color: var(--accent); }
 button.row { width: 100%; text-align: left; }
 .post-actions .memory-wrap { margin-left: auto; }
+
+/* Rader som går i sidled (flikar, grupper, medlemmar): bara sidledes, utan att hela raden kan dras och studsa uppåt/neråt */
+.filterbar, .stories, .row-scroll { overflow-y: hidden; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
