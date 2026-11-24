@@ -83,6 +83,7 @@ function FilterCombo({ value, onChange, options, placeholder }) {
 function SinceLast({ here, posts, where }) {
   const s = useStore();
   const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   // Stängd med ×: de uppdateringarna visas inte igen (sparas i webbläsaren).
   const [closedAt, setClosedAt] = useState(() => { try { return new Date(localStorage.getItem('changes-closed') || 0); } catch { return new Date(0); } });
   const since = s.lastVisit;
@@ -102,8 +103,8 @@ function SinceLast({ here, posts, where }) {
         <span><b>${changes.length} ${changes.length === 1 ? 'uppdatering' : 'uppdateringar'}</b> av appen sen sist</span>
 </button>
       <button class="since-x" aria-label="Dölj" onClick=${() => { const at = new Date(); try { localStorage.setItem('changes-closed', at.toISOString()); } catch {} setClosedAt(at); }}>×</button>
-      ${open && html`<ul>${changes.slice(0, MAX).map((c, i) => html`<li key=${i}>${c.text}</li>`)}
-        ${changes.length > MAX && html`<li class="muted">… och ${changes.length - MAX} till</li>`}</ul>`}
+      ${open && html`<ul>${(showAll ? changes : changes.slice(0, MAX)).map((c, i) => html`<li key=${i}>${c.text}</li>`)}
+        ${!showAll && changes.length > MAX && html`<li class="more-li"><button class="link" onClick=${() => setShowAll(true)}>… och ${changes.length - MAX} till</button></li>`}</ul>`}
     </div>`}
   </div>`;
 }
@@ -226,11 +227,8 @@ const plusDays = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 
 
 // Typerna man väljer mellan när man lägger upp något. Evenemang sparas som ett vanligt inlägg med datum, tid och plats.
 const FORM_TYPES = { vanlig: 'Vanlig post', evenemang: 'Evenemang', finansiering: 'Tillgänglig finansiering', lokal: 'Resurs att låna eller hyra' };
-const TYPE_HELP = {
-  evenemang: 'Något som händer en viss dag: får tid och plats, syns under Events och folk kan anmäla sig.',
-  finansiering: 'Pengar som andra grupper kan söka. Syns under Finansiering.',
-  lokal: 'Något andra kan låna, använda mot en gentjänst eller hyra – en lokal, verktyg, en maskin, mark. Syns under Resurser.',
-};
+// Korta namn i typväljaren överst i formuläret.
+const TYPE_SHORT = { vanlig: 'Inlägg', evenemang: 'Evenemang', finansiering: 'Finansiering', lokal: 'Resurs' };
 const TYPE_TITLE = { vanlig: 'Nytt inlägg', evenemang: 'Nytt evenemang', finansiering: 'Ny finansiering', lokal: 'Ny lokal' };
 
 function FinanceSteps() {
@@ -333,6 +331,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [cropping, setCropping] = useState(null);   // index för bilden som beskärs
+  const [sel, setSel] = useState(null);             // vald bild i raden (text, beskär, flytta)
 
   useEffect(() => {
     if (!editing) return;
@@ -371,6 +370,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
     setSlides((xs) => [...xs, ...files.filter((f) => f !== big).map((file) => ({ key: crypto.randomUUID(), file, media_type: file.type.startsWith('video/') ? 'video' : 'image', preview: URL.createObjectURL(file), text: '' }))]);
     // En enda bild: beskärningen öppnas direkt (som på Instagram). Flera bilder beskärs en i taget med knappen.
     if (files.length === 1 && files[0].type.startsWith('image/')) setCropping(slides.length);
+    if (files.length) setSel(null);
     e.target.value = '';
   }
 
@@ -401,14 +401,37 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
 
   return html`<div class="page">
     <${Header} title=${editing ? 'Redigera inlägg' : fixedType ? TYPE_TITLE[type] : 'Nytt inlägg'} back />
-    <form class="form pad" onSubmit=${submit}>
+    <form class="form pad compose" onSubmit=${submit}>
 
-      ${!fixedType && html`<fieldset class="field types">
-        <legend class="label">Typ av post</legend>
-        ${Object.entries(FORM_TYPES).map(([k, label]) => html`<label class=${'radio type' + (type === k ? ' on' : '')} key=${k}>
-          <input type="radio" name="type" value=${k} checked=${type === k} onChange=${() => setType(k)} />
-          <span><strong>${label}</strong>${TYPE_HELP[k] && html`<small>${TYPE_HELP[k]}</small>`}</span></label>`)}
-      </fieldset>`}
+      ${!fixedType && html`<div class="type-pills" role="radiogroup" aria-label="Typ av inlägg">
+        ${Object.entries(TYPE_SHORT).map(([k, label]) => html`<button type="button" role="radio" aria-checked=${type === k} key=${k}
+          class=${type === k ? 'on' : ''} onClick=${() => setType(k)}>${label}</button>`)}
+      </div>`}
+
+      <div class="media-strip">
+        ${slides.map((sl, i) => html`<div class=${'media-tile' + (sel === i ? ' sel' : '')} key=${sl.key} onClick=${() => setSel(sel === i ? null : i)}>
+          ${sl.media_type === 'video' ? html`<video src=${sl.preview} muted playsinline preload="metadata"></video>` : html`<img src=${sl.preview} alt="" />`}
+          ${sl.media_type === 'video' && html`<span class="media-kind">Video</span>`}
+          <button type="button" class="media-x" aria-label="Ta bort" onClick=${(e) => { e.stopPropagation(); remove(i); setSel(null); }}>×</button>
+        </div>`)}
+        <label class="media-add"><input type="file" accept="image/*,video/*" multiple hidden onChange=${addFiles} />
+          <${Icon} name="image" /><span>${slides.length ? 'Fler' : 'Bild eller video'}</span></label>
+      </div>
+      ${sel != null && slides[sel] && html`<div class="media-edit">
+        <input value=${slides[sel].text} onInput=${(e) => update(sel, { text: e.target.value })} placeholder=${`Text till ${slides[sel].media_type === 'video' ? 'videon' : 'bilden'} (valfritt)`} />
+        <div class="se-actions">
+          ${slides[sel].media_type !== 'video' && html`<button type="button" class="link" onClick=${() => setCropping(sel)}>Beskär och zooma</button>`}
+          ${sel > 0 && html`<button type="button" class="link" onClick=${() => { move(sel, -1); setSel(sel - 1); }}>← Flytta</button>`}
+          ${sel < slides.length - 1 && html`<button type="button" class="link" onClick=${() => { move(sel, 1); setSel(sel + 1); }}>Flytta →</button>`}
+        </div>
+      </div>`}
+        ${cropping != null && slides[cropping] && html`<${CropModal} shape="square" size=${1080} title="Beskär bilden"
+          file=${slides[cropping].file} src=${slides[cropping].file ? null : slides[cropping].image_url}
+          onCancel=${() => setCropping(null)}
+          onDone=${(file) => { update(cropping, { file, preview: URL.createObjectURL(file), media_type: 'image' }); setCropping(null); }} />`}
+
+      <${MentionField} rows="4" value=${caption} onChange=${setCaption} aria-label="Text"
+        placeholder=${{ finansiering: 'Vad kan pengarna sökas för? Vem kan söka?', lokal: 'Vad är det, var finns det och hur lånar man det?', evenemang: 'Vad händer? Vem är välkommen?' }[type] || 'Vad vill du berätta? Skriv @ för att nämna någon.'} />
 
       ${type === 'finansiering' && html`<section class="field fin-form">
         <${FinanceSteps} />
@@ -443,8 +466,10 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
         </div>
       </section>`}
 
-      <section class="field">
-        <div class="label">Vilken grupp gäller inlägget?</div>
+      <div class="settings-block-c">
+        <div class="set-row">
+          <div class="set-label">Grupp</div>
+          <div class="set-body">
         ${noGroups ? html`<div class="nudge">
             <strong>Du är inte med i någon grupp än.</strong>
             <p>Inlägg ska helst höra till en grupp. Gå med i en grupp eller skapa en ny.</p>
@@ -466,48 +491,28 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
             <span><b>Publicera som gruppen</b><small>Gruppens namn och bild visas som avsändare, med ”via ${s.me.name}” under. Bara gruppens admins kan välja det här.</small></span></label>`}`}
       ${isPersonal && html`<${HomePlaceFields} value=${where} onChange=${setWhere} groups=${placeGroups.data} legend="Var gäller inlägget?" chooseLevel=${false} />
         <small class="muted place-why">Inlägg utan grupp syns på den plats du anger här.</small>`}
-      </section>
+          </div>
+        </div>
 
-      <fieldset class="field visibility">
-        <legend class="label">Vem ser inlägget?</legend>
-        <label class="radio"><input type="radio" name="vis" checked=${!limit} onChange=${() => setLimit(false)} /><span><strong>Alla</strong></span></label>
-        <label class="radio"><input type="radio" name="vis" checked=${limit} onChange=${() => { setLimit(true); if (!visibleTo.length && !isPersonal && groupId) setVisibleTo([groupId]); }} />
-          <span><strong>Bara vissa grupper</strong><small>Bara medlemmar i grupperna du väljer ser inlägget. Det går att ändra senare.</small></span></label>
-        ${limit && html`<${GroupsPicker} groups=${myGroups} others=${placeGroups.data || []} value=${visibleTo} onChange=${setVisibleTo} />`}
-      </fieldset>
-
-      <section class="field">
-        <div class="label">Bilder och video</div>
-        ${slides.map((sl, i) => html`<div class="slide-edit" key=${sl.key}>
-          ${sl.media_type === 'video' ? html`<video src=${sl.preview} muted playsinline preload="metadata"></video>` : html`<img src=${sl.preview} alt="" />`}
-          <div class="se-main">
-            <textarea rows="3" placeholder=${`Text till ${sl.media_type === 'video' ? 'videon' : 'bild ' + (i + 1)} (valfritt)`} value=${sl.text} onInput=${(e) => update(i, { text: e.target.value })}></textarea>
-            <div class="se-actions">
-              ${sl.media_type !== 'video' && html`<button type="button" class="link" onClick=${() => setCropping(i)}>Beskär och zooma</button>`}
-              ${i > 0 && html`<button type="button" class="link" onClick=${() => move(i, -1)}>↑ Flytta upp</button>`}
-              <button type="button" class="link danger" onClick=${() => remove(i)}>Ta bort</button>
+        <div class="set-row">
+          <div class="set-label">Vem ser det</div>
+          <div class="set-body">
+            <div class="seg small-seg" role="radiogroup">
+              <button type="button" role="radio" aria-checked=${!limit} class=${!limit ? 'on' : ''} onClick=${() => setLimit(false)}>Alla</button>
+              <button type="button" role="radio" aria-checked=${limit} class=${limit ? 'on' : ''} onClick=${() => { setLimit(true); if (!visibleTo.length && !isPersonal && groupId) setVisibleTo([groupId]); }}>Valda grupper</button>
             </div>
-          </div></div>`)}
-        <label class="addimg"><input type="file" accept="image/*,video/*" multiple hidden onChange=${addFiles} /><${Icon} name="image" />
-          ${slides.length ? 'Lägg till fler bilder eller video' : 'Lägg till bilder eller video'}</label>
-        ${cropping != null && slides[cropping] && html`<${CropModal} shape="square" size=${1080} title="Beskär bilden"
-          file=${slides[cropping].file} src=${slides[cropping].file ? null : slides[cropping].image_url}
-          onCancel=${() => setCropping(null)}
-          onDone=${(file) => { update(cropping, { file, preview: URL.createObjectURL(file), media_type: 'image' }); setCropping(null); }} />`}
-        <small class="muted">Videor får vara högst 50 MB. De spelar när de syns i flödet; ljudet slår man på med knappen på videon.</small>
-      </section>
+            ${limit && html`<${GroupsPicker} groups=${myGroups} others=${placeGroups.data || []} value=${visibleTo} onChange=${setVisibleTo} />`}
+          </div>
+        </div>
 
-      <label class="field">Text till inlägget
-        <${MentionField} rows="4" value=${caption} onChange=${setCaption}
-          placeholder=${{ finansiering: 'Vad kan pengarna sökas för? Vem kan söka?', lokal: 'Var finns det, när går det att låna och hur bokar man?' }[type] || 'Berätta vad ni gjort, vad ni lärt er eller vad ni behöver… Skriv @ för att nämna någon.'} /></label>
-
-      ${(type === 'vanlig' || type === 'evenemang') && html`<section class="field">
-        <div class="label">Taggar <small class="muted">(valfritt)</small></div>
-        <${TagInput} value=${tags} onChange=${setTags} />
-      </section>`}
+        ${(type === 'vanlig' || type === 'evenemang') && html`<div class="set-row">
+          <div class="set-label">Taggar</div>
+          <div class="set-body"><${TagInput} value=${tags} onChange=${setTags} /></div>
+        </div>`}
+      </div>
 
       ${err && html`<p class="error">${err}</p>`}
-      <button class="btn primary block" disabled=${busy}>${busy ? 'Sparar…' : editing ? 'Spara ändringar' : 'Publicera'}</button>
+      <div class="publish-bar"><button class="btn primary block" disabled=${busy}>${busy ? 'Sparar…' : editing ? 'Spara ändringar' : 'Publicera'}</button></div>
     </form>
   </div>`;
 }

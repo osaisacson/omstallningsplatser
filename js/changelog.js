@@ -2,6 +2,7 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-24T22:42', 'Enklare formulär för nya inlägg: typ överst, bilder som en rad, inställningar samlade och Publicera alltid synlig.'],
   ['2026-11-24T22:26', 'Reagera med vilken emoji som helst: + öppnar telefonens emojitangentbord.'],
   ['2026-11-24T22:26', 'Meddelanden laddas snabbare och det du skickar syns direkt. Videor laddas först när de syns.'],
   ['2026-11-24T22:21', 'Tryck på en tagg under ett inlägg för att se fler med samma tagg – och filtrera på flera taggar i Sök.'],
