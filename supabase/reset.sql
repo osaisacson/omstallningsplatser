@@ -9,7 +9,7 @@ drop function if exists public.group_places(), public.is_editor(), public.need_e
   public.accept_editor(boolean), public.request_admin(uuid, text), public.decide_admin_request(uuid, boolean), public.accept_admin_role(uuid), public.begin_visit(), public.can_see_post(uuid[], uuid), public.claim_outbox(int), public.send_outbox(), public.on_outbox(),
   public.on_post_like(), public.guard_group_verified(), public.set_group_verified(uuid, boolean), public.guard_member_verified(), public.set_member_verified(uuid, uuid, boolean),
   public.in_chat(uuid), public.create_chat(text, uuid[]), public.add_chat_members(uuid, uuid[]), public.group_chat(uuid), public.mark_chat_read(uuid), public.set_chat_muted(uuid, boolean),
-  public.chats_for(uuid), public.my_chats(), public.chat_unread_for(uuid), public.my_chat_unread(), public.on_chat_message(), public.region_for_city(text, text), public.fill_region();
+  public.chats_for(uuid), public.my_chats(), public.chat_unread_for(uuid), public.my_chat_unread(), public.on_chat_message(), public.region_for_city(text, text), public.fill_region(), public.notify_mentions();
 drop function if exists public.is_member(uuid), public.is_admin(uuid), public.handle_new_user(), public.on_group_created(),
   public.on_post_created(), public.on_comment_created(), public.ensure_group_admin(), public.on_admin_granted(), public.touch(),
   public.apply_for_funding(uuid, text, numeric, text), public.decide_application(uuid, text), public.mark_paid(uuid),
