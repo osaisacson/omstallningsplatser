@@ -1701,3 +1701,6 @@ drop trigger if exists posts_mentions on public.posts;
 create trigger posts_mentions after insert or update of caption on public.posts for each row execute function public.notify_mentions();
 drop trigger if exists comments_mentions on public.comments;
 create trigger comments_mentions after insert on public.comments for each row execute function public.notify_mentions();
+
+-- 037: Projekt (förr höjdpunkter) kan ha en beskrivning.
+alter table public.highlights add column if not exists description text;
