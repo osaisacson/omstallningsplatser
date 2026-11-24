@@ -71,7 +71,14 @@ export function postPlace(p) {
 }
 // Ett steg utåt (stadsdel → stad → region → land → hela världen). Nivåer som saknas hoppas över.
 // De inre fälten sparas, så att man kan zooma in igen till samma ställe.
+// En plats med stad men utan region får regionen från andra platser i samma stad (Göteborg → Västra Götaland).
+export function withRegion(place) {
+  if (!place?.city || place.region) return place;
+  const region = cityRegion.get(`${(place.country || '').toLowerCase()}|${place.city.toLowerCase()}`);
+  return region ? { ...place, region } : place;
+}
 export function zoomOut(place) {
+  place = withRegion(place);
   let i = LEVELS.indexOf(place?.level || 'world') - 1;
   while (i > 0 && !hasLevel(place, LEVELS[i])) i--;
   return i < 0 ? place : { ...place, level: LEVELS[Math.max(0, i)] };

@@ -4,7 +4,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, setPlace, onRefresh } from '../store.js';
 import { Sheet } from '../ui.js';
-import { getOnlyCountry, learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, regionKey, regionSortKey, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
+import { getOnlyCountry, withRegion, learnCityRegions, LEVELS, SE_REGIONS, placeLabel, regionName, regionKey, regionSortKey, zoomOut, zoomIn, hasLevel, placeFromHome, pcKey, fmtPostcode, lookupPostcode, findDistrict, countryNames } from '../util.js';
 
 const lc = (x) => (x || '').toLowerCase();
 const LEVEL_TITLE = { country: 'land', region: 'region', city: 'stad', district: 'stadsdel' };
@@ -15,6 +15,7 @@ export function placeOptions(groups, extras = []) {
   const maps = { country: new Map(), region: new Map(), city: new Map(), district: new Map() };
   const add = (level, key, o, field) => {
     const m = maps[level]; const x = m.get(key) || { ...o, level, n: 0, ev: 0, home: false };
+    if (!x.region && o.region) x.region = o.region;   // en annan rad i samma stad vet regionen
     if (field === 'home') x.home = true; else x[field]++;
     m.set(key, x);
   };
@@ -116,6 +117,11 @@ export function PlaceSwitcher({ groups }) {
   const nameRef = useFitText(placeLabel(place));
   const depth = LEVELS.indexOf(place.level);
   const next = LEVELS[depth + 1];
+  // En sparad plats som saknar region (t.ex. Göteborg valt innan regionen fanns) får den när platserna har hämtats.
+  useEffect(() => {
+    const fixed = withRegion(place);
+    if (fixed !== place && fixed.region) setPlace(fixed);
+  }, [place.city, place.region, extras.length]);
   // En stadsdel som bara har postnummer får sitt namn (t.ex. 752 25 → Luthagen) när det går att slå upp.
   useEffect(() => {
     if (place.level !== 'district' || place.district || !place.postcode) return;
