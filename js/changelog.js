@@ -2,6 +2,8 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-25T07:05', 'Bocken visas på gruppernas bilder på profilen – där man är verifierad – och admin står diskret under.'],
+  ['2026-11-25T07:05', 'Admins och Redaktionen verifierar medlemmar i en enkel lista via knappen Verifiera på gruppsidan.'],
   ['2026-11-24T22:47', 'Välj vad ett inlägg är relevant för: stadsdelen, staden, regionen, hela landet – eller bara valda grupper.'],
   ['2026-11-24T22:42', 'Enklare formulär för nya inlägg: typ överst, bilder som en rad, inställningar samlade och Publicera alltid synlig.'],
   ['2026-11-24T22:26', 'Reagera med vilken emoji som helst: + öppnar telefonens emojitangentbord.'],

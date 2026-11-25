@@ -506,7 +506,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
 
       <div class="settings-block-c">
         <div class="set-row">
-          <div class="set-label">Relaterar till</div>
+          <div class="set-label set-label-row"><span>Relaterar till</span>${!noGroups && !isPersonal && html`<button type="button" class="link subtle" onClick=${() => setPersonal(true)}>Posta utan grupp</button>`}</div>
           <div class="set-body">
         ${noGroups ? html`<div class="nudge">
             <strong>Du är inte med i någon grupp än.</strong>
@@ -523,7 +523,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
             }}>Gå med</button></div>`; })()}
           ${isPersonal
             ? html`<p class="hint">Personligt inlägg – det hör inte till någon grupp. <button type="button" class="link" onClick=${() => { setPersonal(false); setGroupId(groupId || myGroups[0].id); }}>Välj en grupp i stället</button></p>`
-            : html`<button type="button" class="link subtle" onClick=${() => setPersonal(true)}>Posta utan grupp</button>`}
+            : null}
           ${!isPersonal && s.adminOf.has(groupId) && html`<label class="check as-group">
             <input type="checkbox" checked=${asGroup} onChange=${(e) => setAsGroup(e.target.checked)} />
             <span><b>Publicera som gruppen</b><small>Gruppens namn och bild visas som avsändare, med ”via ${s.me.name}” under. Bara gruppens admins kan välja det här.</small></span></label>`}`}
@@ -539,7 +539,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
               ${[...reachOptions].reverse().map(([lvl, label]) => html`<button type="button" role="radio" key=${lvl}
                 aria-checked=${!limit && (reachNow || reachOptions[0][0]) === lvl} class=${!limit && (reachNow || reachOptions[0][0]) === lvl ? 'on' : ''}
                 onClick=${() => { setLimit(false); setReach(lvl === reachOptions[0][0] ? null : lvl); }}>${label}</button>`)}
-              ${(onlyGroups.length > 0 || !isPersonal) && html`<span class=${'reach-groups' + (limit ? ' on' : '')}>
+              ${(onlyGroups.length > 0 || !isPersonal) && html`<span class="reach-or">…eller bara</span><span class=${'reach-groups' + (limit ? ' on' : '')}>
                 <button type="button" role="radio" aria-checked=${limit} class="rg-avatars" title="Bara gruppens medlemmar"
                   aria-label=${`Bara ${onlyGroups.map((g) => g.name).join(', ') || 'gruppen'}`} onClick=${() => { setLimit(true); if (!visibleTo.length && groupId) setVisibleTo([groupId]); }}>
                   ${onlyGroups.map((g) => html`<${Avatar} key=${g.id} src=${g.avatar_url} name=${g.name} size=${30} />`)}</button>

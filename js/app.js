@@ -4,7 +4,7 @@ import { api } from './api/index.js';
 import { useStore, refreshMe, refreshBadges, refreshAll, toast } from './store.js';
 import { Icon, Avatar, Count } from './ui.js';
 import { Home, PostView, Compose } from './views/feed.js';
-import { GroupView, GroupSettings, NewGroup, Welcome } from './views/groups.js';
+import { GroupView, GroupSettings, GroupVerify, NewGroup, Welcome } from './views/groups.js';
 import { AuthView, Search, Profile, EditProfile, NewPassword } from './views/people.js';
 import { Notifications, Todos, Inbox, Thread, NewMessage, NewChat, ChatView } from './views/inbox.js';
 import { MapView } from './views/map.js';
@@ -37,7 +37,7 @@ function route({ parts: [a, b, c], query }) {
     case 'kalender': return html`<${Home} tab="evenemang" />`;   // gamla länkar
     case 'profil': return html`<${Profile} id=${b} />`;
     case 'redigera-profil': return html`<${EditProfile} section=${query.get('del')} />`;
-    case 'grupp': return c === 'installningar' ? html`<${GroupSettings} id=${b} />` : html`<${GroupView} id=${b} />`;
+    case 'grupp': return c === 'installningar' ? html`<${GroupSettings} id=${b} />` : c === 'verifiera' ? html`<${GroupVerify} id=${b} />` : html`<${GroupView} id=${b} />`;
     case 'ny-grupp': return html`<${NewGroup} next=${query.get('next')} />`;
     case 'valkommen': return html`<${Welcome} />`;
     case 'post': return c === 'redigera' ? html`<${Compose} editId=${b} />` : html`<${PostView} id=${b} />`;

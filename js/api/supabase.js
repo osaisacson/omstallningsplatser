@@ -51,13 +51,15 @@ const readUpTo = new Map();   // samtal → senaste meddelandet vi markerat som 
 async function markVerified(posts) {
   if (!posts.length) return posts;
   const gids = [...new Set(posts.map((p) => p.group_id).filter(Boolean))];
-  if (!editorIds) editorIds = sb.from('group_members').select('user_id, group:groups!inner(locked)').eq('group.locked', true).then((r) => new Set((r.data || []).map((x) => x.user_id)), () => new Set());
-  const [rows, eds] = await Promise.all([
-    gids.length ? sb.from('group_members').select('group_id, user_id').in('group_id', gids).eq('verified', true).then(ok) : [],
-    editorIds,
-  ]);
+  const rows = gids.length ? ok(await sb.from('group_members').select('group_id, user_id').in('group_id', gids).eq('verified', true)) : [];
   const v = new Set(rows.map((r) => r.group_id + '|' + r.user_id));
-  for (const p of posts) p.author_verified = eds.has(p.author_id) || (!!p.group_id && v.has(p.group_id + '|' + p.author_id));
+  for (const p of posts) p.author_verified = !!p.group_id && v.has(p.group_id + '|' + p.author_id);
+  // Namnen på andra grupper ett inlägg är synligt för ("Syns bara för gruppen, X").
+  const other = [...new Set(posts.flatMap((p) => (p.visible_to || []).filter((g) => g !== p.group_id)))];
+  if (other.length) {
+    const names = Object.fromEntries(ok(await sb.from('groups').select('id, name').in('id', other)).map((g) => [g.id, g.name]));
+    for (const p of posts) p.visible_names = (p.visible_to || []).filter((g) => g !== p.group_id).map((g) => names[g]).filter(Boolean);
+  }
   return posts;
 }
 async function upload(file, max = 1280) {

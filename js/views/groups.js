@@ -92,19 +92,20 @@ export function GroupView({ id }) {
     <div class="members-head">
       ${!member && !grp.locked && html`<button class="btn primary small" onClick=${join}>Gå med i gruppen</button>`}
       <span class="members-title">Medlemmar <span class="muted">(${grp.members.length})</span>${grp.locked && html` <a class="members-note" href="#/hjalp">Låst grupp</a>`}</span>
+      ${(s.adminOf.has(id) || s.me.is_editor) && !grp.locked && html`<a class="btn small verify-btn" href=${`#/grupp/${id}/verifiera`}>Verifiera</a>`}
     </div>
     ${grp.members.length > 0 && html`<div class="row-scroll members-row">
       ${[...grp.members].sort((a, b) => (b.role === 'admin') - (a.role === 'admin')).map((m) => html`<a class="mini member" href=${'#/profil/' + m.user.id} key=${m.user.id}
         title=${m.role === 'admin' ? `${m.user.name} (admin)` : m.user.name}>
-        <span class="member-av"><${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${40} /></span>
-        <span>${m.user.name.split(' ')[0]}${m.verified && html`<${VerifiedBadge} title="Verifierad medlem" />`}</span>
+        <span class="member-av"><${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${40} />${m.verified && html`<span class="gi-badge"><${VerifiedBadge} title="Verifierad medlem" /></span>`}</span>
+        <span class="member-name">${m.user.name.split(' ')[0]}</span>
         ${m.role === 'admin' && !grp.locked && html`<small class="member-role">admin</small>`}</a>`)}
     </div>`}
 
     ${(member || grp.highlights.length > 0) && html`<div class="label pad-x">Projekt</div>
     <div class="row-scroll highlights">
       ${member && html`<button class="mini" onClick=${() => setHl({ highlight: { title: '', description: '', post_ids: [] }, edit: true })}>
-        <span class="hl-cover new">+</span><span>Ny</span></button>`}
+        <span class="hl-cover new">+</span><span>Nytt</span></button>`}
       ${grp.highlights.map((h) => html`<button class="mini" key=${h.id} onClick=${() => setHl({ highlight: h, edit: false })}>
         <span class="hl-cover">${cover(h) ? html`<img src=${cover(h)} alt="" loading="lazy" decoding="async" />` : h.title[0]}</span><span>${h.title}</span></button>`)}
     </div>`}
@@ -121,6 +122,29 @@ export function GroupView({ id }) {
     <//>`}
     ${hl && hl.edit && html`<${HighlightEditor} groupId=${id} highlight=${hl.highlight} posts=${list}
       onClose=${() => setHl(null)} onSaved=${() => { setHl(null); reload(); }} />`}
+  </div>`;
+}
+
+// Verifiera medlemmar: en enkel lista där gruppens admins (och Redaktionen) bockar i vilka som är med på riktigt.
+export function GroupVerify({ id }) {
+  const s = useStore();
+  const g = useAsync(() => api.getGroup(id), [id]);
+  const [busy, setBusy] = useState(null);
+  async function toggle(m) {
+    setBusy(m.user.id);
+    if (await attempt(() => api.setMemberVerified(id, m.user.id, !m.verified), m.verified ? `${m.user.name} är inte längre verifierad` : `${m.user.name} är verifierad`)) await g.reload();
+    setBusy(null);
+  }
+  const grp = g.data;
+  return html`<div class="page">
+    <${Header} title="Verifiera medlemmar" back />
+    ${g.loading && !grp ? html`<${Loading} />` : g.error ? html`<${ErrorBox} error=${g.error} />` : html`
+      <p class="hint pad-x">Verifiera dem du vet är med i <b>${grp.name}</b> på riktigt. De får en bock på sina inlägg om gruppen och på gruppens bild på sin profil.</p>
+      <div class="list">${grp.members.map((m) => html`<label class="row verify-row" key=${m.user.id}>
+        <span class="member-av"><${Avatar} src=${m.user.avatar_url} name=${m.user.name} size=${40} />${m.verified && html`<span class="gi-badge"><${VerifiedBadge} /></span>`}</span>
+        <span class="row-main"><strong>${m.user.name}${m.user.id === s.me.id ? ' (du)' : ''}</strong><small class="muted">${m.role === 'admin' ? 'Admin' : 'Medlem'}${m.verified ? ' · verifierad' : ''}</small></span>
+        <input type="checkbox" class="switch" checked=${m.verified} disabled=${busy === m.user.id} onChange=${() => toggle(m)} aria-label=${`Verifiera ${m.user.name}`} />
+      </label>`)}</div>`}
   </div>`;
 }
 

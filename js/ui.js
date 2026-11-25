@@ -516,7 +516,13 @@ export function ThemePicker({ onPick, onClose, title = 'Spara i Minne', hint = '
 // "om Gruppnamn" under namnet: inlägget hör till gruppen, men personen talar inte för den.
 // Har en admin valt att publicera som gruppen är det tvärtom: gruppen är avsändaren och "via Namn" står under.
 // Inlägg som bara vissa grupper ser får en liten markering.
-const limited = (p) => p.visible_to?.length > 0 && html`<span class="limited" title="Syns bara för medlemmar i de grupper som valts">Bara för ${p.visible_to.length === 1 ? 'en grupp' : p.visible_to.length + ' grupper'}</span>`;
+const limited = (p) => {
+  if (!p.visible_to?.length) return null;
+  const own = p.group_id && p.visible_to.includes(p.group_id);
+  const others = p.visible_names || [];
+  const text = own ? ['Syns bara för gruppen', ...others].join(', ') : `Syns bara för ${others.join(', ') || 'valda grupper'}`;
+  return html`<span class="limited" title="Bara medlemmar i de här grupperna ser inlägget">${text}</span>`;
+};
 // Verifierad medlem i inläggets grupp: en liten bock bredvid namnet (gruppens admins verifierar).
 export const VerifiedBadge = ({ title = 'Verifierad medlem' }) => html`<span class="verified-badge" title=${title} aria-label=${title}><${Icon} name="verified" size=${14} /></span>`;
 export function PostHead({ post: p, children }) {

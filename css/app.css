@@ -1085,3 +1085,21 @@ button.row { width: 100%; text-align: left; }
 .rg-avatars { display: inline-flex; padding: 0 !important; border: 0 !important; background: none !important; }
 .rg-avatars .avatar + .avatar { margin-left: -10px; border: 2px solid var(--bg); }
 .rg-add { width: 30px; height: 30px; border-radius: 50%; border: 1.5px dashed var(--line) !important; color: var(--muted); font-size: 17px; line-height: 1; display: grid; place-items: center; padding: 0 !important; background: var(--bg) !important; }
+
+/* Verifierad: bock uppe till höger på gruppens/personens bild, admin som diskret band nertill */
+.gi, .member-av { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
+.gi-badge { position: absolute; top: -3px; right: -4px; line-height: 0; background: var(--bg); border-radius: 50%; padding: 1px; }
+.gi-badge .verified-badge { margin: 0; }
+.gi-admin { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 6px; background: var(--text); color: var(--bg);
+  font-size: 9px; font-weight: 700; letter-spacing: .02em; line-height: 14px; text-transform: lowercase; }
+.mini.member { align-items: center; text-align: center; }
+.member-name { display: block; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.members-head { justify-content: space-between; }
+.verify-btn { margin-left: auto; }
+.verify-row { cursor: pointer; }
+.switch { width: 22px; height: 22px; accent-color: var(--accent); }
+/* Formuläret: Posta utan grupp till höger om rubriken, ingen ram runt Publicera som gruppen */
+.set-label-row { display: flex; justify-content: space-between; align-items: baseline; }
+.set-label-row .link { font-weight: 400; }
+.as-group { border: 0; padding: 4px 0 0; margin-top: 4px; }
+.reach-or { font-size: 13px; color: var(--muted); margin-left: 4px; }

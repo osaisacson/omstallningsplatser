@@ -119,7 +119,8 @@ function shapePost(p) {
     rsvp_going: (db.rsvps || []).filter((r) => r.post_id === p.id && r.status === 'going').length,
     rsvp_mine: (db.rsvps || []).find((r) => r.post_id === p.id && r.user_id === db.session)?.status || null,
     like_count: db.postLikes.filter((l) => l.post_id === p.id).length, liked: db.postLikes.some((l) => l.post_id === p.id && l.user_id === db.session),
-    author_verified: db.members.some((m) => m.user_id === p.author_id && m.verified && (m.group_id === p.group_id || db.groups.find((g) => g.id === m.group_id)?.locked)),
+    author_verified: !!p.group_id && db.members.some((m) => m.user_id === p.author_id && m.verified && m.group_id === p.group_id),
+    visible_names: (p.visible_to || []).filter((g) => g !== p.group_id).map((g) => groupOf(g)?.name).filter(Boolean),
   });
 }
 function firstComment(cs) {
@@ -665,7 +666,7 @@ export const api = {
     persist();
   },
   async setMemberVerified(groupId, userId, on) {
-    const me = needAdmin(groupId);
+    const me = db.editors.includes(db.session) ? needMe() : needAdmin(groupId);   // gruppens admins och Redaktionen
     const m = membership(groupId, userId);
     if (!m) throw new Error('Personen är inte med i gruppen.');
     m.verified = on;

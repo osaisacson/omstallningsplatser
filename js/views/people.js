@@ -174,8 +174,11 @@ function GroupIcons({ groups, canAdd }) {
   };
   return html`<div class="group-icons" onScroll=${more} aria-label="Grupper">
     ${canAdd && html`<a class="group-add" href="#/valkommen" title="Gå med i eller skapa en grupp" aria-label="Gå med i eller skapa en grupp">+</a>`}
-    ${groups.slice(0, shown).map((g) => html`<a href=${'#/grupp/' + g.id} key=${g.id} title=${g.name + (g.role === 'admin' ? ' (admin)' : '')}>
-      <span class=${'group-ring small' + (g.verified_at ? ' verified' : '')}><${Avatar} src=${g.avatar_url} name=${g.name} size=${40} /></span></a>`)}
+    ${groups.slice(0, shown).map((g) => html`<a class="gi" href=${'#/grupp/' + g.id} key=${g.id}
+      title=${g.name + (g.member_verified ? ' – verifierad medlem' : '') + (g.role === 'admin' && !g.locked ? ' – admin' : '')}>
+      <span class=${'group-ring small' + (g.verified_at ? ' verified' : '')}><${Avatar} src=${g.avatar_url} name=${g.name} size=${40} /></span>
+      ${g.member_verified && html`<span class="gi-badge"><${VerifiedBadge} title=${`Verifierad i ${g.name}`} /></span>`}
+      ${g.role === 'admin' && !g.locked && html`<span class="gi-admin">admin</span>`}</a>`)}
   </div>`;
 }
 
@@ -186,13 +189,15 @@ export function Profile({ id }) {
   const isMe = id === s.me.id;
   const [reporting, setReporting] = useState(false);
   const [inviting, setInviting] = useState(false);
-  if (u.loading && !u.data) return html`<div class="page"><${Header} title="" back=${!isMe} /><${Loading} /></div>`;
+  // Tillbakapil alltid när man kommit hit från en annan sida i appen (även till sin egen profil).
+  const canBack = !isMe || (history.state?.idx ?? 0) > 0;
+  if (u.loading && !u.data) return html`<div class="page"><${Header} title="" back=${canBack} /><${Loading} /></div>`;
   if (u.error) return html`<div class="page"><${Header} title="" back /><${ErrorBox} error=${u.error} /></div>`;
   const user = u.data;
   async function logout() { await api.signOut(); await refreshMe(); go('/'); }
   const editorAct = async (fn, msg) => { if (await attempt(fn, msg)) { await refreshMe(); u.reload(); } };
   return html`<div class="page">
-    <${Header} title=${user.name} back=${!isMe} right=${isMe && html`<span class="profile-tools">
+    <${Header} title=${user.name} back=${canBack} right=${isMe && html`<span class="profile-tools">
       <a class="iconbtn" href="#/sok" aria-label="Sök" title="Sök"><${Icon} name="search" /></a>
       ${(s.badges.todos > 0 || s.me.is_editor) && html`<a class="iconbtn" href="#/att-gora" aria-label="Checklista" title="Checklista"><${Icon} name="check" /><${Count} n=${s.badges.todos} /></a>`}
       <a class="iconbtn" href="#/notiser" aria-label="Notiser" title="Notiser"><${Icon} name="bell" /><${Count} n=${s.badges.notifications} /></a>
@@ -212,7 +217,7 @@ export function Profile({ id }) {
         <div><b>${user.groups.length}</b><span>grupper</span></div>
       </div>
     </div>
-    <div class="profile-info"><strong>${user.name}${user.verified_in?.length > 0 && html`<${VerifiedBadge} title=${`Verifierad i ${user.verified_in.join(', ')}`} />`}</strong>
+    <div class="profile-info"><strong>${user.name}</strong>
       ${user.is_editor && html`<a class="role-badge" href="#/hjalp" title="Redaktionen modererar plattformen">Redaktionen</a>`}</div>
     ${(isMe || user.groups.length > 0) && html`<${GroupIcons} groups=${user.groups} canAdd=${isMe} />`}
     ${!isMe && html`<div class="profile-actions">
