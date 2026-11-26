@@ -119,8 +119,9 @@ function SinceLast({ here, posts, where }) {
 const TAB_INFO = {
   finansiering: { behovs: (w) => `Grupper och personer i ${w} som behöver pengar – kan du hjälpa till?`, finns: (w) => `Pengar som går att söka i ${w}.`, tips: () => 'Tips om fonder, bidrag och stöd. Dela det du hittat!' },
   lokal: { behovs: (w) => `Det här efterlyses i ${w} – har du något att låna ut?`, finns: (w) => `Lokaler, verktyg och annat att låna, använda mot en gentjänst eller hyra i ${w}.` },
-  evenemang: { all: (w) => `Kommande evenemang i ${w}, dag för dag.` },
 };
+// Flikar utan switch: en kort rad till vänster om plusknappen.
+const TAB_SHORT = { flode: (w) => html`Visar <b>${w}</b> · byt plats överst`, evenemang: (w) => html`Kommande evenemang i <b>${w}</b>` };
 const TABS = [['flode', 'Flöde'], ['finansiering', 'Finansiering'], ['lokal', 'Resurser'], ['evenemang', 'Events']];
 
 export function Home({ tab: startTab }) {
@@ -195,7 +196,7 @@ export function Home({ tab: startTab }) {
         ${STANCES[tab] ? html`<div class="stance-switch" role="radiogroup" aria-label="Visa">
           ${Object.entries(STANCES[tab]).map(([k, label]) => html`<button type="button" role="radio" key=${k} aria-checked=${stances[tab] === k}
             class=${stances[tab] === k ? 'on' : ''} onClick=${() => setStance(tab, k)}>${label}</button>`)}
-        </div>` : html`<span class="tab-row-fill"></span>`}
+        </div>` : html`<p class="tab-short">${TAB_SHORT[tab]?.(where)}</p>`}
         <a class="post-here" href=${postHref} aria-label=${postLabel} title=${postLabel}>+</a>
       </div>
       ${TAB_INFO[tab]?.[STANCES[tab] ? stances[tab] : 'all'] && html`<p class="tab-info muted small">${TAB_INFO[tab][STANCES[tab] ? stances[tab] : 'all'](where)}</p>`}
