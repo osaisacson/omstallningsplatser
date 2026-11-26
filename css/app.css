@@ -1145,3 +1145,35 @@ button.row { width: 100%; text-align: left; }
 .inline2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .fin-form.simple { display: flex; flex-direction: column; gap: 6px; }
 .compose .stance-switch { margin-top: -6px; }
+
+/* Insamlingar (Pengar behövs) */
+.raise { margin: 10px 0 2px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+.raise-nums { display: flex; align-items: baseline; gap: 4px; font-size: 15px; }
+.raise-nums b { font-size: 18px; }
+.raise-pct { margin-left: auto; font-weight: 700; color: var(--accent); }
+.raise-bar { height: 8px; border-radius: 99px; background: var(--bg-soft); overflow: hidden; }
+.raise-bar span { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width .4s ease; }
+.raise-cancelled .raise-bar span { background: var(--muted); }
+.raise-meta { font-size: 13.5px; }
+.raise-meta .link { font-size: 13.5px; }
+.raise-btn { width: 100%; }
+.raise-mine { display: flex; align-items: center; gap: 12px; font-size: 14.5px; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); }
+.raise-mine span { flex: 1; }
+.raise-form { display: flex; flex-direction: column; gap: 8px; }
+.raise-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.raise-quick button { padding: 9px 0; border-radius: 10px; border: 1.5px solid var(--accent); color: var(--accent); font-weight: 600; background: var(--bg); }
+.raise-quick button:active { background: var(--accent-soft); }
+.raise-own { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.raise-own input { flex: 1; min-width: 0; }
+.raise-own label { display: flex; align-items: center; gap: 8px; flex: 1; }
+.raise-decide { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; background: var(--accent-soft); }
+.raise-decide p { margin: 0; font-size: 14.5px; }
+.raise-pay { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px; border-radius: 8px; background: var(--accent-soft); font-size: 14.5px; }
+.raise-pay span { flex: 1; min-width: 200px; }
+.raise-pay.done { background: var(--bg-soft); }
+.raise-list { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.raise-list li { display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid var(--line); }
+.pledge-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 14.5px; }
+.pledge-sum b { font-size: 16px; }
+.pledge-due { font-weight: 600; color: var(--accent); }
+.raise-form-hint { font-size: 13px; }

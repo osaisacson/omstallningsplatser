@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshBadges, refreshMe, onRefresh } from '../store.js';
-import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal, MentionField } from '../ui.js';
+import { useMyPledges, raiseState, Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal, MentionField } from '../ui.js';
 import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, postVisibleAt, regionName, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut, lookupPostcode, STANCES, stanceOf } from '../util.js';
 
 import { InstallHint } from '../install.js';
@@ -124,6 +124,22 @@ const TAB_INFO = {
 const TAB_SHORT = { flode: (w) => html`Visar <b>${w}</b> · byt plats överst`, evenemang: (w) => html`Kommande evenemang i <b>${w}</b>` };
 const TABS = [['flode', 'Flöde'], ['finansiering', 'Finansiering'], ['lokal', 'Resurser'], ['evenemang', 'Events']];
 
+// Överst under Pengar behövs: hur mycket man själv har lovat, så att man inte lovar för mycket.
+function PledgeSummary() {
+  const list = useMyPledges();
+  if (!list?.length) return null;
+  const active = list.filter((x) => !x.post.pledge_state && raiseState(x.post) !== 'ended');
+  const toPay = list.filter((x) => x.post.pledge_state === 'collect' && !x.paid_at);
+  const paid = list.filter((x) => x.post.pledge_state === 'collect' && x.paid_at);
+  const sum = (xs) => fmtKr(xs.reduce((n, x) => n + Number(x.amount), 0));
+  if (!active.length && !toPay.length && !paid.length) return null;
+  return html`<div class="pledge-sum">
+    <div><span class="muted">Du har lovat</span> <b>${sum([...active, ...toPay])}</b>${active.length > 0 && html`<span class="muted"> till ${active.length} ${active.length === 1 ? 'insamling' : 'insamlingar'}</span>`}</div>
+    ${toPay.length > 0 && html`<a href="#/att-gora" class="pledge-due">${sum(toPay)} att swisha nu ›</a>`}
+    ${paid.length > 0 && html`<small class="muted">${sum(paid)} betalt hittills</small>`}
+  </div>`;
+}
+
 export function Home({ tab: startTab }) {
   const s = useStore();
   // Tillbaka till samma ställe i flödet. Sparas medan man scrollar, återställs när sidan visas igen.
@@ -140,6 +156,8 @@ export function Home({ tab: startTab }) {
   const [cost, setCost] = useState('');    // Resurser: kostnad (fritext)
   const groups = useAsync(() => api.listGroups(), []);
   const posts = usePagedPosts();
+  // Insamlingar vars sista dag passerat avgörs varje timme – men direkt när man tittar under Finansiering.
+  useEffect(() => { if (tab === 'finansiering') api.settlePledges(); }, [tab]);
   const place = s.place || { level: 'world' };
   const choose = (t) => { setTab(t); try { sessionStorage.setItem('tab', t); } catch {} };
   // Behövs / Finns (/ Tips) per flik – kommer ihåg valet under besöket.
@@ -199,6 +217,7 @@ export function Home({ tab: startTab }) {
         </div>` : html`<p class="tab-short">${TAB_SHORT[tab]?.(where)}</p>`}
         <a class="post-here" href=${postHref} aria-label=${postLabel} title=${postLabel}>+</a>
       </div>
+      ${tab === 'finansiering' && stances.finansiering === 'behovs' && html`<${PledgeSummary} />`}
       ${TAB_INFO[tab]?.[STANCES[tab] ? stances[tab] : 'all'] && html`<p class="tab-info muted small">${TAB_INFO[tab][STANCES[tab] ? stances[tab] : 'all'](where)}</p>`}
     </div>
     ${tab === 'lokal' && stances.lokal === 'finns' && html`<div class="space-filters">
@@ -369,6 +388,12 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
   // Byter man typ och valet saknas där (t.ex. Tips för resurser) blir det Finns.
   useEffect(() => { if (STANCES[type] && !STANCES[type][stance]) setStance('finns'); }, [type]);
   const [deadline, setDeadline] = useState('');
+  // Pengar behövs = insamling: vart pengarna ska swishas (förifyllt med det man använde senast).
+  const [swish, setSwish] = useState(() => { try { return localStorage.getItem('swish') || ''; } catch { return ''; } });
+  const [swishName, setSwishName] = useState(() => { try { return localStorage.getItem('swish-name') || ''; } catch { return ''; } });
+  const raising = type === 'finansiering' && stance === 'behovs';
+  // Insamlingar: sista dagen är förvald 30 dagar fram.
+  useEffect(() => { if (raising && !deadline && !editing) setDeadline(plusDays(30)); }, [raising]);
   const [finTotal, setFinTotal] = useState('');
   const [finMode, setFinMode] = useState('split');
   const [finEnd, setFinEnd] = useState(plusDays(30));
@@ -400,6 +425,8 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
       if (p.stance) setStance(p.stance);
       if (p.amount != null) setAmount(String(p.amount));
       if (p.deadline) setDeadline(String(p.deadline).slice(0, 10));
+      if (p.swish) setSwish(p.swish);
+      if (p.swish_name) setSwishName(p.swish_name);
       if (p.fin_total != null) {
         setHadFinance(true); setFinTotal(String(p.fin_total)); setFinMode(p.fin_mode);
         setFinEnd(p.fin_expires_at ? p.fin_expires_at.slice(0, 10) : '');
@@ -463,11 +490,12 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
       const payload = {
         type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : groupWhere, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], reach: limit ? null : reachLvl, caption, tags,
         slides: slides.map(({ id, file, image_url, media_type, text }) => ({ id, file, image_url, media_type, text })),
-        stance, amount, deadline,
+        stance, amount, deadline, swish, swishName,
         space: type === 'lokal' ? { functions, cost, price } : null,
         // Saknar adressen region tas den från gruppen (samma stad) eller från andra platser i appen.
         event: type === 'evenemang' ? (() => { const g = myGroups.find((x) => x.id === groupId); const pl = postPlace({ ...eventColumns(ev), group: isPersonal ? null : g }); return { ...ev, region: ev.region || pl?.region || null, country: ev.country || pl?.country || null }; })() : null,
       };
+      if (raising) try { localStorage.setItem('swish', swish.trim()); localStorage.setItem('swish-name', swishName.trim()); } catch {}
       if (editing) { await api.updatePost(editId, payload); go('/post/' + editId); }
       else { const id = await api.createPost(payload); refreshBadges(); go('/post/' + id); }
     } catch (x) { setErr(x.message); } finally { setBusy(false); }
@@ -516,7 +544,18 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
           : type === 'lokal' ? (stance === 'behovs' ? 'Vad behöver du, när och var? T.ex. "Behöver låna en sladdvinda på lördag."' : 'Var finns det, när går det att låna och hur bokar man?')
           : type === 'evenemang' ? 'Vad händer? Vem är välkommen?' : null) || 'Vad vill du berätta? Skriv @ för att nämna någon.'} />
 
-      ${type === 'finansiering' && html`<section class="field fin-form simple">
+      ${raising && html`<section class="field fin-form simple raise-form">
+        <div class="inline2">
+          <label>Mål<input inputmode="numeric" value=${amount} onInput=${(e) => setAmount(e.target.value)} placeholder="t.ex. 20 000 kr" required /></label>
+          <label>Pågår till och med<input type="date" value=${deadline} min=${new Date().toLocaleDateString('sv-SE')} onInput=${(e) => setDeadline(e.target.value)} required /></label>
+        </div>
+        <div class="inline2">
+          <label>Swishnummer<input inputmode="tel" value=${swish} onInput=${(e) => setSwish(e.target.value)} placeholder="070… eller 123…" required /></label>
+          <label>Mottagare<input value=${swishName} onInput=${(e) => setSwishName(e.target.value)} placeholder="Namnet som syns i Swish" required /></label>
+        </div>
+        <small class="muted">Andra lovar att stötta med valfritt belopp. Ingen betalar förrän sista dagen passerat: når ni målet får alla som lovat en påminnelse om att swisha. Når ni inte målet väljer du om ni samlar in ändå, förlänger eller avbryter.</small>
+      </section>`}
+      ${type === 'finansiering' && !raising && html`<section class="field fin-form simple">
         <div class="inline2">
           <label>${{ behovs: 'Hur mycket behövs?', finns: 'Hur mycket finns?', tips: 'Belopp' }[stance] || 'Belopp'} <small class="muted">(valfritt)</small>
             <input inputmode="numeric" value=${amount} onInput=${(e) => setAmount(e.target.value)} placeholder="t.ex. 20 000" /></label>

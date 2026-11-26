@@ -271,6 +271,16 @@ export function normalizePostInput(input) {
   const amountNum = Number(String(input.amount ?? '').replace(/[\s kr]/g, ''));
   const amount = kind === 'finansiering' && input.amount !== '' && input.amount != null && amountNum >= 0 ? amountNum : null;
   const deadline = kind === 'finansiering' || kind === 'lokal' ? (input.deadline || null) : null;
+  // Pengar behövs = en insamling: mål, sista dag och vart pengarna ska swishas måste finnas.
+  const fundraiser = kind === 'finansiering' && stance === 'behovs';
+  const swish = fundraiser ? String(input.swish || '').trim() || null : null;
+  const swishName = fundraiser ? String(input.swishName || '').trim() || null : null;
+  if (fundraiser) {
+    if (!(amount > 0)) throw new Error('Skriv hur mycket pengar som behövs.');
+    if (!deadline) throw new Error('Välj hur länge insamlingen ska pågå (sista dag).');
+    if (!swish || String(swish).replace(/\D/g, '').length < 7) throw new Error('Skriv vilket Swishnummer pengarna ska skickas till.');
+    if (!swishName) throw new Error('Skriv vem som tar emot pengarna (namnet som syns i Swish).');
+  }
   if (kind === 'lokal') {
     const functions = clean(input.space?.functions);
     if (!functions.length) throw new Error(stance === 'behovs' ? 'Skriv vad som behövs.' : 'Ange minst en sak som beskriver resursen.');
@@ -291,7 +301,7 @@ export function normalizePostInput(input) {
   const place = input.place ? { country: input.place.country || null, region: input.place.region || null, city: input.place.city || null, postcode: input.place.postcode || null } : null;
   const visibleTo = [...new Set((input.visibleTo || []).filter(Boolean))];
   const reach = REACH_LEVELS.includes(input.reach) ? input.reach : null;
-  return { stance, amount, deadline, reach, visibleTo, place, groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
+  return { stance, amount, deadline, swish, swishName, reach, visibleTo, place, groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
 }
 
 export async function resizeImage(file, max = 1280, quality = 0.82) {

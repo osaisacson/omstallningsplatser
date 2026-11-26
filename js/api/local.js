@@ -110,7 +110,7 @@ function shapePost(p) {
   const cs = db.comments.filter((c) => c.post_id === p.id);
   return clone({
     ...p, slides: [...p.slides].sort((a, b) => a.position - b.position),
-    author: profileOf(p.author_id), group: groupOf(p.group_id),
+    author: profileOf(p.author_id), group: groupOf(p.group_id), ...pledgeSums(p.id),
     comment_count: cs.length, finance: financeSummary(p, cs), first_comment: firstComment(cs),
     memory_count: (db.memory || []).filter((m) => m.post_id === p.id).length,
     memory_mine: (db.memory || []).some((m) => m.post_id === p.id && m.user_id === db.session),
@@ -122,6 +122,18 @@ function shapePost(p) {
     author_verified: !!p.group_id && db.members.some((m) => m.user_id === p.author_id && m.verified && m.group_id === p.group_id),
     visible_names: (p.visible_to || []).filter((g) => g !== p.group_id).map((g) => groupOf(g)?.name).filter(Boolean),
   });
+}
+// Insamlingar: alla ser summan och antalet, bara personen själv sitt eget belopp.
+const pledgesOf = (postId) => (db.pledges ||= []).filter((x) => x.post_id === postId);
+function pledgeSums(postId) {
+  const ps = pledgesOf(postId);
+  return { pledged_total: ps.reduce((n, x) => n + x.amount, 0), pledgers: ps.length };
+}
+const todayStr = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+const pledgeOpen = (p) => p && p.kind === 'finansiering' && p.stance === 'behovs' && !p.pledge_state && (!p.deadline || p.deadline >= todayStr());
+function collect(p) {
+  p.pledge_state = 'collect';
+  for (const x of pledgesOf(p.id)) notify(x.user_id, 'pledge', `Insamlingen genomförs – swisha ${x.amount} kr. Du hittar uppgifterna i checklistan.`, { actor_id: p.author_id, post_id: p.id });
 }
 function firstComment(cs) {
   const c = cs.filter((x) => !x.parent_id).sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
@@ -408,7 +420,7 @@ export const api = {
     if (v.groupId && !membership(v.groupId, me)) throw new Error('Du kan bara posta i grupper du är med i.');
     const t = now();
     const post = {
-      id: uuid(), author_id: me, group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
+      id: uuid(), author_id: me, group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, swish: v.swish, swish_name: v.swishName, caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event),
       fin_total: v.finance?.total ?? null, fin_mode: v.finance?.mode ?? null, fin_expires_at: v.finance?.expiresAt ?? null, fin_closed: false,
       created_at: t, updated_at: t, last_activity_at: t, slides: await buildSlides(v.slides),
@@ -426,7 +438,7 @@ export const api = {
     const v = normalizePostInput(input);
     if (p.fin_total != null && !v.finance) throw new Error('Ett finansieringsinlägg kan inte byta typ. Stäng det i stället via ··· på inlägget.');
     if (v.groupId && v.groupId !== p.group_id && !membership(v.groupId, me)) throw new Error('Du kan bara posta i grupper du är med i.');
-    Object.assign(p, { group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: now(),
+    Object.assign(p, { group_id: v.groupId, country: v.place?.country ?? null, region: v.place?.region ?? null, city: v.place?.city ?? null, postcode: v.place?.postcode ?? null, as_group: v.asGroup && membership(v.groupId, me)?.role === 'admin', visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, swish: v.swish, swish_name: v.swishName, caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: now(),
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event) });
     if (v.finance) {
       if (p.fin_total == null) Object.assign(p, { fin_total: v.finance.total, fin_mode: v.finance.mode });
@@ -578,6 +590,63 @@ export const api = {
       ? `Er ansökan på ${c.applied_amount} kr har beviljats. Jag hör av mig när pengarna är skickade. #/post/${p.id}`
       : `Er ansökan på ${c.applied_amount} kr fick tyvärr avslag den här gången. #/post/${p.id}` });
     persist();
+  },
+  async pledge(postId, amount) {
+    const me = needMe(); const p = db.posts.find((x) => x.id === postId);
+    const n = Math.round(Number(String(amount).replace(/[\s kr]/g, '')));
+    if (!(n > 0)) throw new Error('Skriv ett belopp.');
+    if (!pledgeOpen(p)) throw new Error('Insamlingen tar inte emot löften längre.');
+    if (p.author_id === me) throw new Error('Du kan inte stötta din egen insamling.');
+    const mine = pledgesOf(postId).find((x) => x.user_id === me);
+    if (mine) { mine.amount = n; mine.updated_at = now(); }
+    else { db.pledges.push({ post_id: postId, user_id: me, amount: n, created_at: now(), updated_at: now(), paid_at: null }); notify(p.author_id, 'pledge', `stöttar din insamling med ${n} kr`, { actor_id: me, post_id: postId }); }
+    persist();
+  },
+  async unpledge(postId) {
+    const me = needMe(); const p = db.posts.find((x) => x.id === postId);
+    if (!pledgeOpen(p)) throw new Error('Insamlingen är avgjord – löftet går inte att ta tillbaka.');
+    db.pledges = (db.pledges || []).filter((x) => !(x.post_id === postId && x.user_id === me)); persist();
+  },
+  async postPledges(postId) {
+    const me = needMe(); const p = db.posts.find((x) => x.id === postId);
+    return pledgesOf(postId).filter((x) => x.user_id === me || p?.author_id === me).map((x) => ({ ...clone(x), user: profileOf(x.user_id) }));
+  },
+  async myPledges() {
+    const me = needMe();
+    return (db.pledges || []).filter((x) => x.user_id === me).map((x) => {
+      const p = db.posts.find((y) => y.id === x.post_id);
+      return { ...clone(x), post: p && { id: p.id, caption: p.caption, amount: p.amount, deadline: p.deadline, pledge_state: p.pledge_state || null, ...pledgeSums(p.id), swish: p.swish, swish_name: p.swish_name, author_id: p.author_id, author: profileOf(p.author_id), group: groupOf(p.group_id) } };
+    }).filter((x) => x.post);
+  },
+  async myEndedFundraisers() {
+    const me = needMe();
+    return db.posts.filter((p) => p.author_id === me && p.kind === 'finansiering' && p.stance === 'behovs' && !p.pledge_state && p.deadline && p.deadline < todayStr())
+      .map((p) => ({ id: p.id, caption: p.caption, amount: p.amount, deadline: p.deadline, ...pledgeSums(p.id) }));
+  },
+  async decidePledges(postId, decision, deadline = null) {
+    const me = needMe(); const p = db.posts.find((x) => x.id === postId);
+    if (!p || p.author_id !== me) throw new Error('Bara den som lagt upp insamlingen kan bestämma.');
+    if (p.pledge_state) throw new Error('Insamlingen är redan avgjord.');
+    if (decision === 'collect') { if (!pledgesOf(postId).length) throw new Error('Ingen har lovat något än.'); collect(p); }
+    else if (decision === 'extend') {
+      if (!deadline || deadline < todayStr()) throw new Error('Välj en ny sista dag, idag eller senare.');
+      p.deadline = deadline;
+      for (const x of pledgesOf(postId)) notify(x.user_id, 'pledge', `förlängde insamlingen till ${deadline} – ditt löfte står kvar`, { actor_id: me, post_id: postId });
+    } else if (decision === 'cancel') {
+      p.pledge_state = 'cancelled';
+      for (const x of pledgesOf(postId)) notify(x.user_id, 'pledge', 'avbröt insamlingen – du behöver inte betala något', { actor_id: me, post_id: postId });
+    } else throw new Error('Okänt beslut.');
+    persist();
+  },
+  async setPledgePaid(postId, paid) {
+    const me = needMe(); const p = db.posts.find((x) => x.id === postId);
+    if (p?.pledge_state !== 'collect') throw new Error('Insamlingen är inte genomförd än – betala först när den är det.');
+    const x = pledgesOf(postId).find((y) => y.user_id === me); if (x) x.paid_at = paid ? now() : null; persist();
+  },
+  async settlePledges() {
+    let changed = false;
+    for (const p of db.posts) if (p.kind === 'finansiering' && p.stance === 'behovs' && !p.pledge_state && p.deadline && p.deadline < todayStr() && p.amount && pledgeSums(p.id).pledged_total >= p.amount) { collect(p); changed = true; }
+    if (changed) persist();
   },
   async markPaid(commentId) {
     const me = needMe();
@@ -895,6 +964,8 @@ export const api = {
       notifications: db.notifications.filter((n) => n.user_id === me && !n.read).length,
       messages: db.messages.filter((m) => m.to_id === me && !m.read).length + chatsFor(me).filter((c) => !c.muted).reduce((n, c) => n + c.unread, 0),
       todos: db.comments.filter((c) => mine.has(c.post_id) && (c.status === 'granted' || c.status === 'applied')).length
+        + (db.pledges || []).filter((x) => x.user_id === me && !x.paid_at && db.posts.find((p) => p.id === x.post_id)?.pledge_state === 'collect').length
+        + db.posts.filter((p) => p.author_id === me && p.kind === 'finansiering' && p.stance === 'behovs' && !p.pledge_state && p.deadline && p.deadline < todayStr()).length
         + (db.editors.includes(me) ? db.reports.filter((r) => !r.done_at).length + db.adminRequests.filter((r) => r.status === 'pending').length : 0),
     };
   },

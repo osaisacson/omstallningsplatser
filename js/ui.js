@@ -583,6 +583,122 @@ export function ClampText({ text, lines = 4, full = false, className = 'caption'
   </div>`;
 }
 
+// ---- Insamlingar (Pengar behövs): som en enkel Kickstarter ----
+// Mina löften hämtas en gång och delas av alla kort; laddas om när man lovar, ändrar eller betalar.
+let pledgesPromise = null;
+const pledgeListeners = new Set();
+export function loadMyPledges(force = false) {
+  if (!state.me) return Promise.resolve([]);
+  if (force || !pledgesPromise) pledgesPromise = api.myPledges().catch((e) => { pledgesPromise = null; throw e; });
+  return pledgesPromise;
+}
+export function pledgesChanged() { loadMyPledges(true).then(() => pledgeListeners.forEach((f) => f())); refreshBadges(); }
+export function useMyPledges() {
+  const [list, setList] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => loadMyPledges().then((x) => alive && setList(x), () => {});
+    load(); pledgeListeners.add(load);
+    return () => { alive = false; pledgeListeners.delete(load); };
+  }, []);
+  return list;
+}
+const todayIso = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+const dayCount = (iso) => Math.round((new Date(iso + 'T12:00') - new Date(todayIso() + 'T12:00')) / 864e5);
+export const swishNote = (caption) => { const t = plainText(caption || '').replace(/\s+/g, ' ').trim(); return t.length > 40 ? t.slice(0, 40).trim() + '…' : t; };
+export const raiseState = (p) => p.pledge_state || (p.deadline && p.deadline < todayIso() ? (p.amount && p.pledged_total >= p.amount ? 'reached' : 'ended') : 'open');
+const QUICK_KR = [50, 100, 200, 500];
+
+export function RaiseBox({ post: p, full = false, onChange }) {
+  const me = state.me?.id;
+  const mine = useMyPledges()?.find((x) => x.post_id === p.id);
+  const [total, setTotal] = useState({ sum: Number(p.pledged_total) || 0, n: p.pledgers || 0 });
+  useEffect(() => setTotal({ sum: Number(p.pledged_total) || 0, n: p.pledgers || 0 }), [p.pledged_total, p.pledgers]);
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [newDate, setNewDate] = useState('');
+  const [showList, setShowList] = useState(false);
+  const isAuthor = p.author_id === me;
+  const goal = Number(p.amount) || 0;
+  const pct = goal ? Math.round((total.sum / goal) * 100) : 0;
+  const st = raiseState(p);
+  const left = p.deadline ? dayCount(String(p.deadline).slice(0, 10)) : null;
+  const when = st !== 'open' ? null : left == null ? '' : left === 0 ? 'sista dagen idag' : left === 1 ? '1 dag kvar' : `${left} dagar kvar`;
+  const supporters = useAsync(() => (isAuthor && showList ? api.postPledges(p.id) : Promise.resolve(null)), [showList, total.sum]);
+  async function send(amount) {
+    const n = Math.round(Number(String(amount).replace(/[\s kr]/g, '')));
+    if (!(n > 0)) return toast('Skriv ett belopp.');
+    setBusy(true);
+    if (await attempt(() => api.pledge(p.id, n), mine ? `Ändrat till ${fmtKr(n)}` : `Tack! Du stöttar med ${fmtKr(n)}`)) {
+      setTotal((t) => ({ sum: t.sum - (Number(mine?.amount) || 0) + n, n: t.n + (mine ? 0 : 1) }));
+      setOpen(false); setVal(''); pledgesChanged(); onChange?.();
+    }
+    setBusy(false);
+  }
+  async function withdraw() {
+    if (!confirm(`Ta tillbaka ditt löfte på ${fmtKr(mine.amount)}?`)) return;
+    if (await attempt(() => api.unpledge(p.id), 'Löftet är borttaget')) {
+      setTotal((t) => ({ sum: t.sum - Number(mine.amount), n: t.n - 1 })); pledgesChanged(); onChange?.();
+    }
+  }
+  async function decide(d) {
+    const msg = { collect: `Samla in ${fmtKr(total.sum)} från ${total.n} ${total.n === 1 ? 'person' : 'personer'}? Alla som lovat får en påminnelse om att swisha.`, cancel: 'Avbryta insamlingen? Ingen behöver betala något.' }[d];
+    if (msg && !confirm(msg)) return;
+    if (d === 'extend' && !newDate) return toast('Välj en ny sista dag.');
+    if (await attempt(() => api.decidePledges(p.id, d, d === 'extend' ? newDate : null), { collect: 'Insamlingen genomförs', extend: 'Insamlingen är förlängd', cancel: 'Insamlingen är avbruten' }[d])) { refreshBadges(); onChange?.(); }
+  }
+  async function paid(on) {
+    if (await attempt(() => api.setPledgePaid(p.id, on), on ? 'Tack! Markerat som betalt' : 'Ångrat')) pledgesChanged();
+  }
+  if (!goal) return null;
+  return html`<div class=${'raise raise-' + st}>
+    <div class="raise-nums"><b>${fmtKr(total.sum)}</b><span class="muted"> av ${fmtKr(goal)}</span><span class="raise-pct">${pct} %</span></div>
+    <div class="raise-bar" role="progressbar" aria-valuenow=${pct} aria-valuemin="0" aria-valuemax="100"><span style=${`width:${Math.min(100, pct)}%`}></span></div>
+    <div class="raise-meta muted">${total.n} ${total.n === 1 ? 'person' : 'personer'} stöttar${when ? ` · ${when}` : ''}
+      ${{ collect: ' · Genomförs', cancelled: ' · Avbruten', reached: ' · Målet nått!', ended: ' · Tiden är ute' }[st] || ''}
+      ${isAuthor && total.n > 0 && html` · <button type="button" class="link" onClick=${() => setShowList((x) => !x)}>${showList ? 'Dölj' : 'Visa'} vilka</button>`}</div>
+    ${showList && supporters.data && html`<ul class="raise-list">${supporters.data.map((x) => html`<li key=${x.user_id}>
+      <a href=${'#/profil/' + x.user_id}>${x.user?.name || 'Någon'}</a><span>${fmtKr(x.amount)}${x.paid_at ? ' · betalt ✓' : ''}</span></li>`)}</ul>`}
+
+    ${st === 'open' && !isAuthor && (mine
+      ? html`<div class="raise-mine"><span>Du stöttar med <b>${fmtKr(mine.amount)}</b></span>
+          <button type="button" class="link" onClick=${() => { setOpen((x) => !x); setVal(String(mine.amount)); }}>Ändra</button>
+          <button type="button" class="link subtle" onClick=${withdraw}>Ta tillbaka</button></div>`
+      : !open && html`<button type="button" class="btn primary raise-btn" onClick=${() => setOpen(true)}>Stötta</button>`)}
+    ${st === 'open' && open && html`<div class="raise-form">
+      <div class="raise-quick">${QUICK_KR.map((n) => html`<button type="button" key=${n} disabled=${busy} onClick=${() => send(n)}>${n} kr</button>`)}</div>
+      <form class="raise-own" onSubmit=${(e) => { e.preventDefault(); send(val); }}>
+        <input inputmode="numeric" value=${val} onInput=${(e) => setVal(e.target.value)} placeholder="Annat belopp" aria-label="Belopp i kronor" />
+        <button class="btn primary" disabled=${busy}>${mine ? 'Spara' : 'Lova'}</button>
+        <button type="button" class="link subtle" onClick=${() => setOpen(false)}>Avbryt</button>
+      </form>
+      <small class="muted">Du betalar inget nu. Genomförs insamlingen får du en påminnelse i checklistan om att swisha.</small>
+    </div>`}
+
+    ${(st === 'ended' || st === 'reached') && isAuthor && html`<div class="raise-decide">
+      ${st === 'reached'
+        ? html`<p><b>Ni nådde målet!</b> Alla som lovat får snart en påminnelse om att swisha.</p>`
+        : html`<p><b>Tiden är ute.</b> Ni fick löften om ${fmtKr(total.sum)} av ${fmtKr(goal)} (${pct} %) från ${total.n} ${total.n === 1 ? 'person' : 'personer'}. Vad vill ni göra?</p>
+          <div class="btnrow">
+            ${total.n > 0 && html`<button type="button" class="btn primary small" onClick=${() => decide('collect')}>Samla in ändå</button>`}
+            <button type="button" class="btn small" onClick=${() => decide('cancel')}>Avbryt insamlingen</button>
+          </div>
+          <form class="raise-own" onSubmit=${(e) => { e.preventDefault(); decide('extend'); }}>
+            <label class="muted small">Förläng till<input type="date" min=${todayIso()} value=${newDate} onInput=${(e) => setNewDate(e.target.value)} /></label>
+            <button class="btn small">Förläng</button>
+          </form>`}
+    </div>`}
+    ${(st === 'ended' || st === 'reached') && !isAuthor && html`<p class="muted small">${st === 'reached' ? 'Målet är nått – ' : 'Tiden är ute – '}${mine ? 'du får en påminnelse om insamlingen genomförs.' : 'insamlingen tar inte emot fler löften.'}</p>`}
+    ${st === 'collect' && mine && html`<div class=${'raise-pay' + (mine.paid_at ? ' done' : '')}>
+      ${mine.paid_at ? html`<span>Du har swishat ${fmtKr(mine.amount)} ✓</span><button type="button" class="link subtle" onClick=${() => paid(false)}>Ångra</button>`
+        : html`<span>Swisha <b>${fmtKr(mine.amount)}</b> till <b>${p.swish}</b>${p.swish_name ? ` (${p.swish_name})` : ''}. Märk betalningen ”${swishNote(p.caption)}”.</span>
+          <button type="button" class="btn primary small" onClick=${() => paid(true)}>Jag har swishat</button>`}</div>`}
+    ${st === 'collect' && isAuthor && full && html`<p class="muted small">Alla som lovat har fått en påminnelse om att swisha till ${p.swish}${p.swish_name ? ` (${p.swish_name})` : ''}.</p>`}
+    ${st === 'cancelled' && html`<p class="muted small">Insamlingen avbröts – ingen behöver betala.</p>`}
+  </div>`;
+}
+
 export function PostCard({ post: p, onChange, full = false }) {
   const [applying, setApplying] = useState(false);
   const edited = new Date(p.updated_at) - new Date(p.created_at) > 60e3;
@@ -599,7 +715,8 @@ export function PostCard({ post: p, onChange, full = false }) {
       ${p.slides.length > 0 && p.caption && html`<${ClampText} text=${p.caption} lines=${4} full=${full} className="caption" />`}
       ${kind === 'lokal' && html`<p class="space-info">${stanceOf(p) === 'behovs' && html`<b>Behövs: </b>`}${(p.space_functions || []).join(' · ')}
         ${stanceOf(p) !== 'behovs' && html`<span class="space-cost">${SPACE_COSTS[p.space_cost] || ''}${p.space_cost === 'kostar' && p.space_price ? `: ${p.space_price}` : ''}</span>`}</p>`}
-      ${kind === 'finansiering' && !p.finance && (p.amount != null || p.deadline) && html`<p class="money-info">
+      ${kind === 'finansiering' && stanceOf(p) === 'behovs' && p.amount > 0 && html`<${RaiseBox} post=${p} full=${full} onChange=${onChange} />`}
+      ${kind === 'finansiering' && !p.finance && !(stanceOf(p) === 'behovs' && p.amount > 0) && (p.amount != null || p.deadline) && html`<p class="money-info">
         ${p.amount != null && html`<b>${fmtKr(p.amount)}</b>`}${p.amount != null && p.deadline && ' · '}${p.deadline && html`<span>Senast ${new Date(p.deadline).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long' })}</span>`}</p>`}
       ${kind === 'vanlig' && p.categories?.length > 0 && html`<p class="topics">${p.categories.map((c) => html`<a href=${'#/sok?flik=poster&tagg=' + encodeURIComponent(c.toLowerCase())} title=${`Visa inlägg med #${c.toLowerCase()}`}>#${c.toLowerCase()}</a>`)}</p>`}
       ${p.is_event && p.event_start && html`<${EventBox} post=${p} />`}

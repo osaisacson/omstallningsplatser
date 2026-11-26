@@ -286,7 +286,7 @@ export const api = {
     const v = normalizePostInput(input);
     await ensureCategories(v.categories);
     const post = ok(await sb.from('posts').insert({
-      author_id: needMe(), group_id: v.groupId, as_group: v.asGroup, visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
+      author_id: needMe(), group_id: v.groupId, as_group: v.asGroup, visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, swish: v.swish, swish_name: v.swishName, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event),
       fin_total: v.finance?.total ?? null, fin_mode: v.finance?.mode ?? null, fin_expires_at: v.finance?.expiresAt ?? null,
     }).select('id').single());
@@ -298,7 +298,7 @@ export const api = {
     await ensureCategories(v.categories);
     const current = ok(await sb.from('posts').select('fin_total').eq('id', id).single());
     if (current.fin_total != null && !v.finance) throw new Error('Ett finansieringsinlägg kan inte byta typ. Stäng det i stället via ··· på inlägget.');
-    const patch = { group_id: v.groupId, as_group: v.asGroup, visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: new Date().toISOString(),
+    const patch = { group_id: v.groupId, as_group: v.asGroup, visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, swish: v.swish, swish_name: v.swishName, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: new Date().toISOString(),
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event) };
     if (v.finance) {
       if (current.fin_total == null) Object.assign(patch, { fin_total: v.finance.total, fin_mode: v.finance.mode });
@@ -367,6 +367,30 @@ export const api = {
     ok(await sb.rpc('apply_for_funding', { p_post: postId, p_group: groupId, p_body: body, p_amount: amount, p_payout: payout }));
   },
   async decideApplication(commentId, decision) { ok(await sb.rpc('decide_application', { p_comment: commentId, p_decision: decision })); },
+  // ---- Insamlingar (Pengar behövs) ----
+  async pledge(postId, amount) {
+    const n = Math.round(Number(String(amount).replace(/[\s kr]/g, '')));
+    if (!(n > 0)) throw new Error('Skriv ett belopp.');
+    ok(await sb.from('pledges').upsert({ post_id: postId, user_id: needMe(), amount: n }, { onConflict: 'post_id,user_id' }));
+  },
+  async unpledge(postId) { ok(await sb.from('pledges').delete().eq('post_id', postId).eq('user_id', needMe())); },
+  async postPledges(postId) {
+    return ok(await sb.from('pledges').select(`*, user:profiles!pledges_user_id_fkey(${PROFILE})`).eq('post_id', postId).order('created_at'));
+  },
+  async myPledges() {
+    return ok(await sb.from('pledges').select(`*, post:posts!pledges_post_id_fkey(id, caption, amount, deadline, pledge_state, pledged_total, swish, swish_name, author_id, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url))`)
+      .eq('user_id', needMe()).order('created_at', { ascending: false }));
+  },
+  async myEndedFundraisers() {
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+    return ok(await sb.from('posts').select('id, caption, amount, deadline, pledged_total, pledgers').eq('author_id', needMe())
+      .eq('kind', 'finansiering').eq('stance', 'behovs').is('pledge_state', null).lt('deadline', today));
+  },
+  async decidePledges(postId, decision, deadline = null) { ok(await sb.rpc('decide_pledges', { p_post: postId, p_decision: decision, p_deadline: deadline })); },
+  async setPledgePaid(postId, paid) {
+    ok(await sb.from('pledges').update({ paid_at: paid ? new Date().toISOString() : null }).eq('post_id', postId).eq('user_id', needMe()));
+  },
+  async settlePledges() { await sb.rpc('settle_pledges').then(() => {}, () => {}); },
   async markPaid(commentId) { ok(await sb.rpc('mark_paid', { p_comment: commentId })); },
   async listTodos() {
     const rows = ok(await sb.from('comments')
@@ -526,14 +550,17 @@ export const api = {
   async badges() {
     if (!meId) return { notifications: 0, messages: 0, todos: 0 };
     const count = async (q) => (await q).count ?? 0;
-    const [notifications, dms, chatUnread, todos, reports, adminReqs] = await Promise.all([
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+    const [notifications, dms, chatUnread, todos, reports, adminReqs, toPay, toDecide] = await Promise.all([
       count(sb.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', meId).eq('read', false)),
       count(sb.from('messages').select('id', { count: 'exact', head: true }).eq('to_id', meId).eq('read', false)),
       sb.rpc('my_chat_unread').then((r) => r.data || 0, () => 0),
       count(sb.from('comments').select('id, post:posts!inner(author_id)', { count: 'exact', head: true }).in('status', ['applied', 'granted']).eq('post.author_id', meId)),
       meEditor ? count(sb.from('reports').select('id', { count: 'exact', head: true }).is('done_at', null)) : 0,
       meEditor ? count(sb.from('admin_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending')) : 0,
+      count(sb.from('pledges').select('post_id, post:posts!inner(pledge_state)', { count: 'exact', head: true }).eq('user_id', meId).is('paid_at', null).eq('post.pledge_state', 'collect')),
+      count(sb.from('posts').select('id', { count: 'exact', head: true }).eq('author_id', meId).eq('kind', 'finansiering').eq('stance', 'behovs').is('pledge_state', null).lt('deadline', today)),
     ]);
-    return { notifications, messages: dms + chatUnread, todos: todos + reports + adminReqs };
+    return { notifications, messages: dms + chatUnread, todos: todos + reports + adminReqs + toPay + toDecide };
   },
 };

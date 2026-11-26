@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, goBack, attempt, refreshBadges, toast, state } from '../store.js';
-import { Icon, Avatar, Header, UserRow, Loading, ErrorBox, linkify } from '../ui.js';
+import { Icon, Avatar, Header, UserRow, Loading, ErrorBox, linkify, useMyPledges, pledgesChanged, swishNote } from '../ui.js';
 import { fmtKr, timeAgo, plainText } from '../util.js';
 
 const KIND = { post: 'Inlägg', group: 'Grupp', user: 'Användare', feedback: 'Feedback' };
@@ -74,9 +74,39 @@ export function Notifications() {
   </div>`;
 }
 
+// Insamlingar: swisha det man lovat när en insamling genomförs, och bestäm nästa steg för egna insamlingar vars tid är ute.
+function PledgeTodos() {
+  const list = useMyPledges();
+  const ended = useAsync(() => api.settlePledges().then(() => api.myEndedFundraisers()), []);
+  const due = (list || []).filter((x) => x.post.pledge_state === 'collect');
+  const toPay = due.filter((x) => !x.paid_at), paid = due.filter((x) => x.paid_at);
+  const decide = ended.data || [];
+  if (!toPay.length && !paid.length && !decide.length) return null;
+  async function mark(x, on) {
+    if (on && !confirm(`Har du swishat ${fmtKr(x.amount)} till ${x.post.swish}?`)) return;
+    if (await attempt(() => api.setPledgePaid(x.post_id, on), on ? 'Tack! Markerat som betalt' : 'Ångrat')) pledgesChanged();
+  }
+  const why = (x) => html`<small>För <a href=${'#/post/' + x.post.id}>”${swishNote(x.post.caption)}”</a>${x.post.group ? ` · ${x.post.group.name}` : ` · ${x.post.author?.name || ''}`}</small>`;
+  const item = (x) => html`<label class=${'todo' + (x.paid_at ? ' done' : '')} key=${x.post_id}>
+    <input type="checkbox" checked=${!!x.paid_at} onChange=${(e) => { const on = e.target.checked; e.target.checked = !!x.paid_at; mark(x, on); }} />
+    <span>Swisha <strong>${fmtKr(x.amount)}</strong> till <strong>${x.post.swish}</strong>${x.post.swish_name ? ` (${x.post.swish_name})` : ''}
+      ${why(x)}${!x.paid_at && html`<small class="muted">Märk betalningen ”${swishNote(x.post.caption)}”. Bocka i när du har swishat.</small>`}</span>
+  </label>`;
+  return html`<section class="todo-sec">
+    <h2 class="todo-title">Insamlingar</h2>
+    ${decide.length > 0 && html`<div class="label pad-x">Tiden är ute – välj nästa steg</div><div class="list">${decide.map((p) => html`<a class="todo" key=${p.id} href=${'#/post/' + p.id}>
+      <span class="todo-dot" aria-hidden="true"></span>
+      <span><strong>”${swishNote(p.caption)}”</strong> fick ${fmtKr(p.pledged_total)} av ${fmtKr(p.amount)} (${p.amount ? Math.round((p.pledged_total / p.amount) * 100) : 0} %)
+        <small class="muted">Öppna för att samla in ändå, förlänga eller avbryta</small></span></a>`)}</div>`}
+    ${toPay.length > 0 && html`<div class="label pad-x">Att swisha</div><div class="list">${toPay.map(item)}</div>`}
+    ${paid.length > 0 && html`<div class="label pad-x">Betalt</div><div class="list">${paid.map(item)}</div>`}
+  </section>`;
+}
+
 export function Todos() {
   const s = useStore();
   const t = useAsync(() => api.listTodos(), []);
+  const pl = useMyPledges();
   async function pay(x) {
     if (!confirm(`Har du skickat ${fmtKr(x.applied_amount)} till ${x.group?.name || x.author.name}?`)) return;
     if (await attempt(() => api.markPaid(x.id), 'Markerat som utbetalt')) { refreshBadges(); t.reload(); }
@@ -98,18 +128,18 @@ export function Todos() {
   return html`<div class="page">
     <${Header} title="Checklista" back />
     ${s.me.is_editor && html`<${EditorChecklist} />`}
-    <section class="todo-sec">
-    ${s.me.is_editor && html`<h2 class="todo-title">Finansiering</h2>`}
-    <p class="intro muted">Här hamnar det du behöver göra för finansiering du har lagt upp: ansökningar att bevilja eller avslå, och pengar att betala ut. Bocka av när du har betalat.</p>
-    ${t.loading && !t.data ? html`<${Loading} />` : t.error ? html`<${ErrorBox} error=${t.error} />` : html`
-      ${!decide.length && !open.length && html`<p class="empty">Inget att göra för finansiering just nu.</p>`}
+    <${PledgeTodos} />
+    ${t.loading && !t.data ? html`<${Loading} />` : t.error ? html`<${ErrorBox} error=${t.error} />` : all.length === 0
+      ? !(pl || []).some((x) => x.post.pledge_state === 'collect') && html`<p class="empty">Inget att göra just nu. Här hamnar det du ska swisha när en insamling du stöttar genomförs.</p>`
+      : html`<section class="todo-sec">
+      <h2 class="todo-title">Ansökningar</h2>
       ${decide.length > 0 && html`<div class="label pad-x">Ansökningar att besluta om</div>
         <div class="list">${decide.map((x) => html`<a class="todo" key=${x.id} href=${'#/post/' + x.post.id}>
           <span class="todo-dot" aria-hidden="true"></span>
           <span>${who(x)} söker ${fmtKr(x.applied_amount)}<small class="muted">Öppna inlägget för att bevilja eller avslå</small></span></a>`)}</div>`}
       ${open.length > 0 && html`<div class="label pad-x">Att betala ut</div><div class="list">${open.map(payItem)}</div>`}
-      ${done.length > 0 && html`<div class="label pad-x">Klart</div><div class="list">${done.map(payItem)}</div>`}`}
-    </section>
+      ${done.length > 0 && html`<div class="label pad-x">Klart</div><div class="list">${done.map(payItem)}</div>`}
+    </section>`}
   </div>`;
 }
 
