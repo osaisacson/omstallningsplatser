@@ -355,6 +355,7 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
     if (best) setGroupId(best);
   }, [myPosts.data]);
   const [addingGroup, setAddingGroup] = useState(false);
+  const [editPlace, setEditPlace] = useState(false);   // fristående inlägg: platsen är ens egen, men går att ändra
   const [distName, setDistName] = useState(null);
   const [tags, setTags] = useState([]);
   const [functions, setFunctions] = useState([]);
@@ -405,6 +406,8 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
   }, [editId]);
 
   const noGroups = myGroups.length === 0;
+  // Saknas en plats (inget hem angivet) måste man fylla i den – annars räcker förvalet.
+  const [placeMissing] = useState(() => !!checkHome(where));
   const isPersonal = personal || noGroups || !groupId;
   // Räckvidd: från inläggets plats (gruppens, eller den man angett) och utåt. Första valet är där det hör hemma.
   const homePl = isPersonal ? where : (placeGroups.data || []).find((g) => g.id === groupId) || myGroups.find((g) => g.id === groupId) || {};
@@ -565,14 +568,14 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
           ${!isPersonal && s.adminOf.has(groupId) && html`<label class="check as-group">
             <input type="checkbox" checked=${asGroup} onChange=${(e) => setAsGroup(e.target.checked)} />
             <span><b>Publicera som gruppen</b><small>Gruppens namn och bild visas som avsändare, med ”via ${s.me.name}” under. Bara gruppens admins kan välja det här.</small></span></label>`}
-      ${isPersonal && html`<${HomePlaceFields} value=${where} onChange=${setWhere} groups=${placeGroups.data} legend="Var gäller inlägget?" chooseLevel=${false} />
-        <small class="muted place-why">Inlägg utan grupp syns på den plats du anger här.</small>`}
           </div>
         </div>
 
         <div class="set-row">
-          <div class="set-label">Relevant för</div>
+          <div class="set-label set-label-row"><span>Relevant för</span>${isPersonal && !placeMissing && html`<button type="button" class="link subtle"
+            onClick=${() => setEditPlace((x) => !x)}>${editPlace ? 'Klar' : 'Ändra plats'}</button>`}</div>
           <div class="set-body">
+            ${isPersonal && (editPlace || placeMissing) && html`<${HomePlaceFields} value=${where} onChange=${setWhere} groups=${placeGroups.data} legend=${placeMissing ? 'Var gäller inlägget?' : ''} chooseLevel=${false} />`}
             <div class="reach-pills" role="radiogroup" aria-label="Vilka är inlägget relevant för?">
               ${[...reachOptions].reverse().map(([lvl, label]) => html`<button type="button" role="radio" key=${lvl}
                 aria-checked=${!limit && (reachNow || reachOptions[0][0]) === lvl} class=${!limit && (reachNow || reachOptions[0][0]) === lvl ? 'on' : ''}

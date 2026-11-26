@@ -325,7 +325,7 @@ export function HomePlaceFields({ value, onChange, groups, legend = 'Var håller
   const levels = [['country', 'Land'], ['region', 'Region'], ['city', 'Stad'], ['district', 'Stadsdel']];
   const can = (l) => (l === 'district' ? !!(v.postcode && v.postcode.replace(/\D/g, '').length === 5) : !!v[l]);
   return html`<fieldset class="field place-fields home-place">
-    <legend class="label">${legend}</legend>
+    ${legend && html`<legend class="label">${legend}</legend>`}
     <${Combo} label="Land" value=${draft.country} options=${countries} placeholder="Börja skriva, t.ex. Sverige"
       committed=${!!v.country} onInput=${(t) => typing('country', t)} onCommit=${(n) => commit('country', n)} />
     ${v.country && html`<${Combo} label="Region" value=${draft.region} options=${regions} placeholder=${lc(v.country) === 'sverige' ? 'Börja skriva, t.ex. Västra Götalandsregionen' : 'Börja skriva'}
