@@ -15,6 +15,31 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="css/app.css" />
+  <!-- Alla appens filer hämtas samtidigt i stället för en i taget (snabbare start). -->
+  <link rel="modulepreload" href="js/app.js" />
+  <link rel="modulepreload" href="js/lib.js" />
+  <link rel="modulepreload" href="js/config.js" />
+  <link rel="modulepreload" href="js/api/index.js" />
+  <link rel="modulepreload" href="js/api/supabase.js" />
+  <link rel="modulepreload" href="js/store.js" />
+  <link rel="modulepreload" href="js/util.js" />
+  <link rel="modulepreload" href="js/ui.js" />
+  <link rel="modulepreload" href="js/changelog.js" />
+  <link rel="modulepreload" href="js/visits.js" />
+  <link rel="modulepreload" href="js/install.js" />
+  <link rel="modulepreload" href="js/views/feed.js" />
+  <link rel="modulepreload" href="js/views/place.js" />
+  <link rel="modulepreload" href="js/views/calendar.js" />
+  <link rel="modulepreload" href="js/views/groups.js" />
+  <link rel="modulepreload" href="js/views/people.js" />
+  <link rel="modulepreload" href="js/views/inbox.js" />
+  <link rel="modulepreload" href="js/views/map.js" />
+  <link rel="modulepreload" href="js/views/help.js" />
+  <link rel="modulepreload" href="js/views/roles.js" />
+  <link rel="modulepreload" href="js/views/memory.js" />
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js" crossorigin />
+  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" />
+  <link rel="preconnect" href="https://fzpicyaiosdrfjodsnmd.supabase.co" crossorigin />
 </head>
 <body>
   <div id="root"><div class="splash"><img src="icon.svg" alt="" width="56" height="56" /><p id="splash-text"></p></div></div>

@@ -1,5 +1,6 @@
 // Riktig backend: Supabase (Postgres + inloggning + bildlagring). Se supabase/setup.sql för tabeller och regler.
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+// Biblioteket laddas av api/index.js som en enda fil (window.supabase).
+const { createClient } = window.supabase;
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 import { postThemes, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage } from '../util.js';
 
@@ -158,7 +159,8 @@ export const api = {
     return { needsConfirmation: false };
   },
   async signIn({ email, password }) { ok(await sb.auth.signInWithPassword({ email: email.trim(), password })); },
-  async signOut() { await sb.auth.signOut(); meId = null; },
+  async signOut() {
+    try { localStorage.removeItem('feed-cache-' + this.mode); } catch { /* ok */ } await sb.auth.signOut(); meId = null; },
   async signInWithProvider(provider) {
     ok(await sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + location.pathname } }));
   },

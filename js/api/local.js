@@ -226,7 +226,8 @@ export const api = {
     if (!c || c.hash !== await sha(password)) throw new Error('Fel e-post eller lösenord.');
     db.session = c.id; persist(); emit();
   },
-  async signOut() { db.session = null; persist(); emit(); },
+  async signOut() {
+    try { localStorage.removeItem('feed-cache-' + this.mode); } catch { /* ok */ } db.session = null; persist(); emit(); },
   isRecovering() { return false; },
   async signInWithProvider() { throw new Error('Inloggning med Google/Apple fungerar bara med Supabase.'); },
   async requestPasswordReset() { throw new Error('I demoläget skickas inga mejl. Skapa ett nytt konto i stället.'); },

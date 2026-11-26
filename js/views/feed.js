@@ -16,15 +16,21 @@ import { EventsList } from './calendar.js';
 
 // Flödet hämtas 30 inlägg i taget; nästa omgång hämtas när man närmar sig slutet (eller när den valda
 // platsen eller fliken har för lite att visa), så att appen håller farten även med väldigt många inlägg.
-const PAGE = 30;
+const FIRST = 10, PAGE = 20;   // första omgången liten så att flödet syns fort; resten hämtas när man scrollar
 // Flödet och var man var i det sparas när man lämnar det (t.ex. öppnar ett inlägg), så att man kommer
 // tillbaka till samma inlägg i stället för till toppen. Allt hämtas om i bakgrunden när man kommer tillbaka.
-let feedCache = null;
+let feedCache = (() => {   // det man såg senast visas direkt när appen startar, och hämtas om i bakgrunden
+  try { const d = JSON.parse(localStorage.getItem('feed-cache-' + api.mode) || 'null'); return d?.length ? { data: d, loading: false, error: null, done: false } : null; } catch { return null; }
+})();
 export const feedScroll = { y: 0 };
 function usePagedPosts() {
   const [st, setSt] = useState(() => feedCache ? { ...feedCache, loading: false } : { data: null, loading: true, error: null, done: false });
   const ref = useRef(st); ref.current = st;
-  useEffect(() => { if (st.data) feedCache = st; }, [st]);
+  useEffect(() => {
+    if (!st.data) return;
+    feedCache = st;
+    try { localStorage.setItem('feed-cache-' + api.mode, JSON.stringify(st.data.slice(0, FIRST))); } catch { /* går bra utan */ }
+  }, [st]);
   const busy = useRef(false);
   async function load(reset) {
     if (busy.current) return;
@@ -33,7 +39,7 @@ function usePagedPosts() {
     try {
       const cur = reset ? [] : ref.current.data || [];
       // Vid omladdning hämtas lika många som redan visas, så att man inte tappar sin plats.
-      const limit = reset ? Math.max(PAGE, (ref.current.data || []).length) : PAGE;
+      const limit = reset ? Math.max(FIRST, Math.min((ref.current.data || []).length, 60)) : PAGE;
       const page = await api.listPosts({ before: cur.length ? cur[cur.length - 1].created_at : null, limit });
       setSt({ data: [...cur, ...page], loading: false, error: null, done: page.length < limit });
     } catch (error) { setSt((x) => ({ ...x, loading: false, error })); }
