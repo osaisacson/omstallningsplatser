@@ -1103,3 +1103,12 @@ button.row { width: 100%; text-align: left; }
 .set-label-row .link { font-weight: 400; }
 .as-group { border: 0; padding: 4px 0 0; margin-top: 4px; }
 .reach-or { font-size: 13px; color: var(--muted); margin-left: 4px; }
+
+/* Långa texter: de första raderna och "… se mer". Långa ord och länkar bryts i stället för att göra sidan bredare. */
+.caption, .textpost, .c-body, .bubble, .project-desc, .slide-text, .profile-info p, .first-comment { overflow-wrap: anywhere; word-break: normal; }
+.clamped .clamp-body { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp-body { white-space: pre-wrap; }
+.see-more { color: var(--muted); font-size: 14px; padding: 2px 0 0; }
+.textpost.long { display: block; text-align: left; font-size: 15px; line-height: 1.5; min-height: 0; padding: 16px 18px; }
+.textpost.long .see-more { font-size: 14px; }
+.post, .post-body, .feed { min-width: 0; max-width: 100%; }

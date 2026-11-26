@@ -563,6 +563,26 @@ export async function sharePost(p) {
   try { await navigator.clipboard.writeText(url); toast('Länken är kopierad'); } catch { prompt('Kopiera länken:', url); }
 }
 
+// Lång text: visas med de första raderna och "… se mer" (på inläggets egen sida visas allt).
+export function ClampText({ text, lines = 4, full = false, className = 'caption' }) {
+  const ref = useRef();
+  const [open, setOpen] = useState(full);
+  const [over, setOver] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || open) return;
+    const check = () => setOver(el.scrollHeight > el.clientHeight + 2);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, open]);
+  return html`<div class=${className + (open ? '' : ' clamped')}>
+    <div ref=${ref} class="clamp-body" style=${open ? '' : `-webkit-line-clamp: ${lines}`}>${linkify(text)}</div>
+    ${!open && over && html`<button type="button" class="see-more" onClick=${(e) => { e.stopPropagation(); setOpen(true); }}>… se mer</button>`}
+  </div>`;
+}
+
 export function PostCard({ post: p, onChange, full = false }) {
   const [applying, setApplying] = useState(false);
   const edited = new Date(p.updated_at) - new Date(p.created_at) > 60e3;
@@ -572,9 +592,11 @@ export function PostCard({ post: p, onChange, full = false }) {
   return html`<article class="post">
     <${PostHead} post=${p}><${PostMenu} post=${p} onChange=${onChange} /><//>
     ${p.slides.length ? html`<${Carousel} slides=${p.slides} badge=${badge} />`
-      : html`<div class="textpost">${badge && html`<span class="img-badge corner-solo">${badge}</span>`}${linkify(p.caption)}</div>`}
+      : plainText(p.caption).length > 160
+        ? html`<div class="textpost long">${badge && html`<span class="img-badge corner-solo">${badge}</span>`}<${ClampText} text=${p.caption} lines=${8} full=${full} /></div>`
+        : html`<div class="textpost">${badge && html`<span class="img-badge corner-solo">${badge}</span>`}${linkify(p.caption)}</div>`}
     <div class="post-body">
-      ${p.slides.length > 0 && p.caption && html`<p class="caption">${linkify(p.caption)}</p>`}
+      ${p.slides.length > 0 && p.caption && html`<${ClampText} text=${p.caption} lines=${4} full=${full} className="caption" />`}
       ${kind === 'lokal' && html`<p class="space-info">${(p.space_functions || []).join(' · ')}
         <span class="space-cost">${SPACE_COSTS[p.space_cost] || ''}${p.space_cost === 'kostar' && p.space_price ? `: ${p.space_price}` : ''}</span></p>`}
       ${kind === 'vanlig' && p.categories?.length > 0 && html`<p class="topics">${p.categories.map((c) => html`<a href=${'#/sok?flik=poster&tagg=' + encodeURIComponent(c.toLowerCase())} title=${`Visa inlägg med #${c.toLowerCase()}`}>#${c.toLowerCase()}</a>`)}</p>`}
@@ -841,6 +863,8 @@ export function linkify(text) {
     if (part.startsWith('@[')) { const m = part.match(/^@\[(.+)\]\(([0-9a-f-]{36})\)$/); return html`<a class="mention" href=${'#/profil/' + m[2]} onClick=${(e) => e.stopPropagation()}>@${m[1]}</a>`; }
     if (part.startsWith('#/post/')) return html`<a class="msg-link" href=${part}>Visa inlägget</a>`;
     const url = part.startsWith('www.') ? 'https://' + part : part;
-    return html`<a class="auto-link" href=${url} target="_blank" rel="noopener noreferrer" onClick=${(e) => e.stopPropagation()}>${part.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>`;
+    // Långa adresser kortas i texten (hela adressen finns kvar i länken och syns när man håller över den).
+    const shown = part.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+    return html`<a class="auto-link" href=${url} title=${url} target="_blank" rel="noopener noreferrer" onClick=${(e) => e.stopPropagation()}>${shown.length > 40 ? shown.slice(0, 38) + '…' : shown}</a>`;
   });
 }
