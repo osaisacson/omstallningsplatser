@@ -2,6 +2,7 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-26T13:41', 'Nya inlägg är fristående som förval – välj en grupp om inlägget hör till en.'],
   ['2026-11-26T13:34', 'Skriv något om dig själv på din profil.'],
   ['2026-11-26T13:34', 'Flödet visar vanliga inlägg; finansiering, resurser och evenemang har egna flikar med en knapp för att lägga upp.'],
   ['2026-11-26T13:34', 'Resurser: Behövs eller Finns – efterlys t.ex. en sladdvinda och få svar i kommentarerna.'],

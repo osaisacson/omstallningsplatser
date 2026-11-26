@@ -191,12 +191,14 @@ export function Home({ tab: startTab }) {
         ${label}</button>`)}
     </div>
     <div class="tab-head">
-      ${STANCES[tab] && html`<div class="stance-switch" role="radiogroup" aria-label="Visa">
-        ${Object.entries(STANCES[tab]).map(([k, label]) => html`<button type="button" role="radio" key=${k} aria-checked=${stances[tab] === k}
-          class=${stances[tab] === k ? 'on' : ''} onClick=${() => setStance(tab, k)}>${label}</button>`)}
-      </div>`}
+      <div class="tab-row">
+        ${STANCES[tab] ? html`<div class="stance-switch" role="radiogroup" aria-label="Visa">
+          ${Object.entries(STANCES[tab]).map(([k, label]) => html`<button type="button" role="radio" key=${k} aria-checked=${stances[tab] === k}
+            class=${stances[tab] === k ? 'on' : ''} onClick=${() => setStance(tab, k)}>${label}</button>`)}
+        </div>` : html`<span class="tab-row-fill"></span>`}
+        <a class="post-here" href=${postHref} aria-label=${postLabel} title=${postLabel}>+</a>
+      </div>
       ${TAB_INFO[tab]?.[STANCES[tab] ? stances[tab] : 'all'] && html`<p class="tab-info muted small">${TAB_INFO[tab][STANCES[tab] ? stances[tab] : 'all'](where)}</p>`}
-      <a class="post-here" href=${postHref}><span class="post-here-plus">+</span>${postLabel}</a>
     </div>
     ${tab === 'lokal' && stances.lokal === 'finns' && html`<div class="space-filters">
       <${FilterCombo} value=${fn} onChange=${setFn} options=${functions} placeholder="Vad" />
@@ -331,7 +333,7 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
   const [slides, setSlides] = useState([]);
   const [caption, setCaption] = useState('');
   const [groupId, setGroupId] = useState(initialGroup && s.memberOf.has(initialGroup) ? initialGroup : myGroups[0]?.id || null);
-  const [personal, setPersonal] = useState(false);
+  const [personal, setPersonal] = useState(!(initialGroup && s.memberOf.has(initialGroup)));   // förvalt: fristående post
   const [asGroup, setAsGroup] = useState(false);   // admins kan publicera som gruppen
   // Vem ser inlägget: alla (tom lista) eller bara medlemmar i valda grupper.
   const [visibleTo, setVisibleTo] = useState([]);
@@ -450,7 +452,7 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
     setBusy(true);
     try {
       const payload = {
-        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], reach: limit ? null : reachNow, caption, tags,
+        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], reach: limit ? null : reachLvl, caption, tags,
         slides: slides.map(({ id, file, image_url, media_type, text }) => ({ id, file, image_url, media_type, text })),
         stance, amount, deadline,
         space: type === 'lokal' ? { functions, cost, price } : null,
@@ -540,14 +542,18 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
 
       <div class="settings-block-c">
         <div class="set-row">
-          <div class="set-label set-label-row"><span>Relaterar till</span>${!noGroups && !isPersonal && html`<button type="button" class="link subtle" onClick=${() => setPersonal(true)}>Posta utan grupp</button>`}</div>
+          <div class="set-label">Relaterar till</div>
           <div class="set-body">
-        ${noGroups ? html`<div class="nudge">
-            <strong>Du är inte med i någon grupp än.</strong>
-            <p>Inlägg ska helst höra till en grupp. Gå med i en grupp eller skapa en ny.</p>
-            <div class="btnrow"><a class="btn small" href="#/sok?flik=grupper">Hitta grupper</a><a class="btn small primary" href="#/ny-grupp?next=/ny">Skapa grupp</a></div>
-          </div>`
-        : html`${!isPersonal && html`<${GroupPicker} groups=${myGroups} others=${placeGroups.data || []} value=${groupId} onChange=${(id) => { groupTouched.current = true; setGroupId(id); setPersonal(false); }} />`}
+          <div class="rel-choice" role="radiogroup" aria-label="Relaterar till">
+            <button type="button" role="radio" aria-checked=${isPersonal} class=${'rel-opt' + (isPersonal ? ' on' : '')} onClick=${() => { setPersonal(true); setAsGroup(false); }}>
+              <${Avatar} src=${s.me.avatar_url} name=${s.me.name} size=${28} /><strong>Fristående post (ingen grupp)</strong><span class="rel-dot"></span></button>
+            ${noGroups ? html`<a class="rel-opt" href="#/sok?flik=grupper"><span class="rel-icon">+</span><strong>Gå med i en grupp för att posta där</strong></a>`
+            : isPersonal ? (() => { const g = groupById(groupId) || myGroups[0]; return html`<button type="button" role="radio" aria-checked=${false} class="rel-opt"
+                onClick=${() => { groupTouched.current = true; setPersonal(false); setGroupId(g.id); }}>
+                <${Avatar} src=${g.avatar_url} name=${g.name} size=${28} /><strong>${g.name}</strong><span class="rel-dot"></span></button>`; })()
+            : html`<div class="rel-opt on rel-group" role="radio" aria-checked="true"><${GroupPicker} groups=${myGroups} others=${placeGroups.data || []} value=${groupId}
+                onChange=${(id) => { groupTouched.current = true; setGroupId(id); setPersonal(false); setAsGroup(false); }} /></div>`}
+          </div>
           ${!isPersonal && groupId && !s.memberOf.has(groupId) && (() => { const g = (placeGroups.data || []).find((x) => x.id === groupId); return html`<div class="nudge join-first">
             <span>Du är inte med i <b>${g?.name || 'gruppen'}</b>. Gå med för att kunna posta där.</span>
             <button type="button" class="btn small primary" disabled=${joining} onClick=${async () => {
@@ -555,12 +561,9 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
               if (await attempt(() => api.joinGroup(groupId), `Du är med i ${g?.name || 'gruppen'}`)) await refreshMe();
               setJoining(false);
             }}>Gå med</button></div>`; })()}
-          ${isPersonal
-            ? html`<p class="hint">Personligt inlägg – det hör inte till någon grupp. <button type="button" class="link" onClick=${() => { setPersonal(false); setGroupId(groupId || myGroups[0].id); }}>Välj en grupp i stället</button></p>`
-            : null}
           ${!isPersonal && s.adminOf.has(groupId) && html`<label class="check as-group">
             <input type="checkbox" checked=${asGroup} onChange=${(e) => setAsGroup(e.target.checked)} />
-            <span><b>Publicera som gruppen</b><small>Gruppens namn och bild visas som avsändare, med ”via ${s.me.name}” under. Bara gruppens admins kan välja det här.</small></span></label>`}`}
+            <span><b>Publicera som gruppen</b><small>Gruppens namn och bild visas som avsändare, med ”via ${s.me.name}” under. Bara gruppens admins kan välja det här.</small></span></label>`}
       ${isPersonal && html`<${HomePlaceFields} value=${where} onChange=${setWhere} groups=${placeGroups.data} legend="Var gäller inlägget?" chooseLevel=${false} />
         <small class="muted place-why">Inlägg utan grupp syns på den plats du anger här.</small>`}
           </div>
