@@ -3,7 +3,7 @@ import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshBadges, refreshMe, onRefresh } from '../store.js';
 import { Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal, MentionField } from '../ui.js';
-import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, postVisibleAt, regionName, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut, lookupPostcode } from '../util.js';
+import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, postVisibleAt, regionName, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut, lookupPostcode, STANCES, stanceOf } from '../util.js';
 
 import { InstallHint } from '../install.js';
 import { CHANGES } from '../changelog.js';
@@ -115,6 +115,12 @@ function SinceLast({ here, posts, where }) {
   </div>`;
 }
 
+// Texten under flikarna (per Behövs / Finns / Tips).
+const TAB_INFO = {
+  finansiering: { behovs: (w) => `Grupper och personer i ${w} som behöver pengar – kan du hjälpa till?`, finns: (w) => `Pengar som går att söka i ${w}.`, tips: () => 'Tips om fonder, bidrag och stöd. Dela det du hittat!' },
+  lokal: { behovs: (w) => `Det här efterlyses i ${w} – har du något att låna ut?`, finns: (w) => `Lokaler, verktyg och annat att låna, använda mot en gentjänst eller hyra i ${w}.` },
+  evenemang: { all: (w) => `Kommande evenemang i ${w}, dag för dag.` },
+};
 const TABS = [['flode', 'Flöde'], ['finansiering', 'Finansiering'], ['lokal', 'Resurser'], ['evenemang', 'Events']];
 
 export function Home({ tab: startTab }) {
@@ -135,17 +141,25 @@ export function Home({ tab: startTab }) {
   const posts = usePagedPosts();
   const place = s.place || { level: 'world' };
   const choose = (t) => { setTab(t); try { sessionStorage.setItem('tab', t); } catch {} };
+  // Behövs / Finns (/ Tips) per flik – kommer ihåg valet under besöket.
+  const [stances, setStances] = useState(() => { try { return { finansiering: 'finns', lokal: 'finns', ...JSON.parse(sessionStorage.getItem('stances') || '{}') }; } catch { return { finansiering: 'finns', lokal: 'finns' }; } });
+  const setStance = (t, k) => setStances((x) => { const n = { ...x, [t]: k }; try { sessionStorage.setItem('stances', JSON.stringify(n)); } catch {} return n; });
+  const postHref = tab === 'flode' ? '#/ny?typ=vanlig' : tab === 'evenemang' ? '#/ny?typ=evenemang' : `#/ny?typ=${tab}&stance=${stances[tab]}`;
+  const postLabel = { flode: 'Nytt inlägg', evenemang: 'Nytt evenemang',
+    finansiering: { behovs: 'Berätta vad ni behöver pengar till', finns: 'Lägg upp pengar som går att söka', tips: 'Dela ett tips' }[stances.finansiering],
+    lokal: stances.lokal === 'behovs' ? 'Efterlys något' : 'Erbjud något att låna' }[tab];
 
   const here = (posts.data || []).filter((p) => postVisibleAt(p, place));
-  const finance = here.filter((p) => postType(p) === 'finansiering');
-  const spaces = here.filter((p) => postType(p) === 'lokal');
-  const available = finance.reduce((sum, p) => sum + (p.finance?.open ? p.finance.remaining : 0), 0);
+  // Flödet är vanliga inlägg; finansiering, resurser och evenemang har egna flikar.
+  const plain = here.filter((p) => postType(p) === 'vanlig' && !p.is_event);
+  const finance = here.filter((p) => postType(p) === 'finansiering' && stanceOf(p) === stances.finansiering);
+  const spaces = here.filter((p) => postType(p) === 'lokal' && stanceOf(p) === stances.lokal);
   const functions = [...new Set(spaces.flatMap((p) => p.space_functions || []))].sort((a, b) => a.localeCompare(b, 'sv'));
   const has = (text, needle) => text.toLowerCase().includes(needle.trim().toLowerCase());
   const costText = (p) => `${SPACE_COSTS[p.space_cost] || ''} ${p.space_price || ''}`;
   const shown = tab === 'finansiering' ? finance
     : tab === 'lokal' ? spaces.filter((p) => (!fn.trim() || (p.space_functions || []).some((f) => has(f, fn))) && (!cost.trim() || has(costText(p), cost)))
-    : here;
+    : plain;
   const localGroups = (groups.data || []).filter((g) => inPlace(g, place));
   const where = placeLabel(place);
 
@@ -176,14 +190,15 @@ export function Home({ tab: startTab }) {
       ${TABS.map(([k, label]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => choose(k)}>
         ${label}</button>`)}
     </div>
-    ${tab !== 'flode' && html`<div class="tab-head">
-      <div class="tab-info">
-        ${tab === 'finansiering' && html`<span class="muted small">Pengar som grupper i ${where} kan söka just nu${available > 0 ? html` – totalt <b class="avail">${fmtKr(available)}</b> tillgängligt` : ''}.</span>`}
-        ${tab === 'evenemang' && html`<span class="muted small">Kommande evenemang i ${where}, dag för dag</span>`}
-        ${tab === 'lokal' && html`<span class="muted small">Lokaler, verktyg och annat att låna, använda mot en gentjänst eller hyra i ${where}</span>`}
-      </div>
-    </div>`}
-    ${tab === 'lokal' && html`<div class="space-filters">
+    <div class="tab-head">
+      ${STANCES[tab] && html`<div class="stance-switch" role="radiogroup" aria-label="Visa">
+        ${Object.entries(STANCES[tab]).map(([k, label]) => html`<button type="button" role="radio" key=${k} aria-checked=${stances[tab] === k}
+          class=${stances[tab] === k ? 'on' : ''} onClick=${() => setStance(tab, k)}>${label}</button>`)}
+      </div>`}
+      ${TAB_INFO[tab]?.[STANCES[tab] ? stances[tab] : 'all'] && html`<p class="tab-info muted small">${TAB_INFO[tab][STANCES[tab] ? stances[tab] : 'all'](where)}</p>`}
+      <a class="post-here" href=${postHref}><span class="post-here-plus">+</span>${postLabel}</a>
+    </div>
+    ${tab === 'lokal' && stances.lokal === 'finns' && html`<div class="space-filters">
       <${FilterCombo} value=${fn} onChange=${setFn} options=${functions} placeholder="Vad" />
       <${FilterCombo} value=${cost} onChange=${setCost} options=${Object.values(SPACE_COSTS)} placeholder="Kostnad" />
     </div>`}
@@ -193,7 +208,7 @@ export function Home({ tab: startTab }) {
           ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> högst upp för att zooma ut till ${placeLabel(zoomOut(place))}.</span>`}</p>`} />`
       : posts.loading && !posts.data ? html`<${FeedSkeleton} />` : posts.error ? html`<${ErrorBox} error=${posts.error} />`
       : shown.length === 0 && !posts.done ? html`<${FeedSkeleton} n=${1} />`
-      : shown.length === 0 ? html`<p class="empty">${{ flode: 'Inga inlägg', finansiering: 'Ingen finansiering att söka', lokal: 'Inga resurser', }[tab]} i ${where}${(fn || cost) ? ' som matchar' : ' än'}.
+      : shown.length === 0 ? html`<p class="empty">${{ flode: 'Inga inlägg', finansiering: { behovs: 'Ingen som behöver pengar', finns: 'Inga pengar att söka', tips: 'Inga tips' }[stances.finansiering], lokal: stances.lokal === 'behovs' ? 'Inget efterlyst' : 'Inga resurser' }[tab]} i ${where}${(fn || cost) ? ' som matchar' : ' än'}.
           ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> högst upp för att zooma ut till ${placeLabel(zoomOut(place))}.</span>`}</p>`
       : html`<div class="feed">${shown.map((p) => html`<${PostCard} key=${p.id} post=${p} onChange=${posts.reload} />`)}</div>`}
     ${tab !== 'evenemang' && posts.data && html`<${LoadMore} posts=${posts} short=${shown.length < 12} />`}
@@ -235,7 +250,7 @@ const plusDays = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 
 const FORM_TYPES = { vanlig: 'Vanlig post', evenemang: 'Evenemang', finansiering: 'Tillgänglig finansiering', lokal: 'Resurs att låna eller hyra' };
 // Korta namn i typväljaren överst i formuläret.
 const TYPE_SHORT = { vanlig: 'Inlägg', evenemang: 'Evenemang', finansiering: 'Finansiering', lokal: 'Resurs' };
-const TYPE_TITLE = { vanlig: 'Nytt inlägg', evenemang: 'Nytt evenemang', finansiering: 'Ny finansiering', lokal: 'Ny lokal' };
+const TYPE_TITLE = { vanlig: 'Nytt inlägg', evenemang: 'Nytt evenemang', finansiering: 'Finansiering', lokal: 'Resurs' };
 
 function FinanceSteps() {
   return html`<div class="steps">
@@ -305,7 +320,7 @@ function ChipPicker({ options, selected, onChange, placeholder }) {
   </div>`;
 }
 
-export function Compose({ groupId: initialGroup, type: initialType, editId }) {
+export function Compose({ groupId: initialGroup, type: initialType, stance: initialStance, editId }) {
   const s = useStore();
   const editing = !!editId;
   const fixedType = editing || !!FORM_TYPES[initialType];   // från en flik: typen är redan vald
@@ -342,6 +357,12 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
   const [functions, setFunctions] = useState([]);
   const [cost, setCost] = useState('gratis');
   const [price, setPrice] = useState('');
+  // Finansiering och resurser: behövs / finns (/ tips), plus valfritt belopp och sista dag.
+  const [stance, setStance] = useState(initialStance || 'finns');
+  const [amount, setAmount] = useState('');
+  // Byter man typ och valet saknas där (t.ex. Tips för resurser) blir det Finns.
+  useEffect(() => { if (STANCES[type] && !STANCES[type][stance]) setStance('finns'); }, [type]);
+  const [deadline, setDeadline] = useState('');
   const [finTotal, setFinTotal] = useState('');
   const [finMode, setFinMode] = useState('split');
   const [finEnd, setFinEnd] = useState(plusDays(30));
@@ -369,6 +390,9 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
           address: p.event_address || '', postcode: p.event_postcode, city: p.event_city, region: p.event_region, country: p.event_country,
           lat: p.event_lat, lng: p.event_lng, rsvp: p.event_rsvp !== false });
       }
+      if (p.stance) setStance(p.stance);
+      if (p.amount != null) setAmount(String(p.amount));
+      if (p.deadline) setDeadline(String(p.deadline).slice(0, 10));
       if (p.fin_total != null) {
         setHadFinance(true); setFinTotal(String(p.fin_total)); setFinMode(p.fin_mode);
         setFinEnd(p.fin_expires_at ? p.fin_expires_at.slice(0, 10) : '');
@@ -420,7 +444,6 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
 
   async function submit(e) {
     e.preventDefault(); setErr('');
-    if (type === 'finansiering' && !hadFinance && finEnd && finEnd < plusDays(0)) return setErr('Slutdatumet har redan passerat.');
     if (!isPersonal && groupId && !s.memberOf.has(groupId)) return setErr('Gå med i gruppen först – eller välj en annan grupp.');
     if (limit && !visibleTo.length) return setErr('Välj minst en grupp som ska se inlägget, eller välj Alla.');
     if (isPersonal && checkHome(where)) return setErr(checkHome(where).replace('du håller till i', 'inlägget gäller'));
@@ -429,9 +452,7 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       const payload = {
         type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], reach: limit ? null : reachNow, caption, tags,
         slides: slides.map(({ id, file, image_url, media_type, text }) => ({ id, file, image_url, media_type, text })),
-        finance: type === 'finansiering'
-          ? { total: Number(String(finTotal).replace(/\s/g, '')), mode: finMode, expiresAt: finEnd ? new Date(finEnd + 'T23:59:59').toISOString() : null }
-          : null,
+        stance, amount, deadline,
         space: type === 'lokal' ? { functions, cost, price } : null,
         // Saknar adressen region tas den från gruppen (samma stad) eller från andra platser i appen.
         event: type === 'evenemang' ? (() => { const g = myGroups.find((x) => x.id === groupId); const pl = postPlace({ ...eventColumns(ev), group: isPersonal ? null : g }); return { ...ev, region: ev.region || pl?.region || null, country: ev.country || pl?.country || null }; })() : null,
@@ -450,6 +471,11 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
       ${!fixedType && html`<div class="type-pills" role="radiogroup" aria-label="Typ av inlägg">
         ${Object.entries(TYPE_SHORT).map(([k, label]) => html`<button type="button" role="radio" aria-checked=${type === k} key=${k}
           class=${type === k ? 'on' : ''} onClick=${() => setType(k)}>${label}</button>`)}
+      </div>`}
+
+      ${STANCES[type] && html`<div class="stance-switch" role="radiogroup" aria-label=${type === 'finansiering' ? 'Pengar' : 'Resurs'}>
+        ${Object.entries(STANCES[type]).map(([k, label]) => html`<button type="button" role="radio" key=${k} aria-checked=${stance === k}
+          class=${stance === k ? 'on' : ''} onClick=${() => setStance(k)}>${{ finansiering: { behovs: 'Pengar behövs', finns: 'Pengar finns', tips: 'Tips' }, lokal: { behovs: 'Behövs', finns: 'Finns att låna' } }[type][k]}</button>`)}
       </div>`}
 
       <div class="media-strip">
@@ -475,26 +501,28 @@ export function Compose({ groupId: initialGroup, type: initialType, editId }) {
           onDone=${(file) => { update(cropping, { file, preview: URL.createObjectURL(file), media_type: 'image' }); setCropping(null); }} />`}
 
       <${MentionField} rows="4" value=${caption} onChange=${setCaption} aria-label="Text"
-        placeholder=${{ finansiering: 'Vad kan pengarna sökas för? Vem kan söka?', lokal: 'Vad är det, var finns det och hur lånar man det?', evenemang: 'Vad händer? Vem är välkommen?' }[type] || 'Vad vill du berätta? Skriv @ för att nämna någon.'} />
+        placeholder=${(type === 'finansiering' ? { behovs: 'Vad behöver ni pengar till, och varför?', finns: 'Vad kan pengarna sökas för, vem kan söka och hur?', tips: 'Vilken fond, vilket bidrag eller stöd? Klistra in en länk.' }[stance]
+          : type === 'lokal' ? (stance === 'behovs' ? 'Vad behöver du, när och var? T.ex. "Behöver låna en sladdvinda på lördag."' : 'Var finns det, när går det att låna och hur bokar man?')
+          : type === 'evenemang' ? 'Vad händer? Vem är välkommen?' : null) || 'Vad vill du berätta? Skriv @ för att nämna någon.'} />
 
-      ${type === 'finansiering' && html`<section class="field fin-form">
-        <${FinanceSteps} />
-        <label>Totalbelopp (kr)<input inputmode="numeric" required value=${finTotal} disabled=${hadFinance} onInput=${(e) => setFinTotal(e.target.value)} placeholder="t.ex. 20000" /></label>
-        <div class="label small">Hur ska pengarna fördelas?</div>
-        <label class="radio"><input type="radio" name="mode" checked=${finMode === 'split'} disabled=${hadFinance} onChange=${() => setFinMode('split')} />
-          <span>Flera kan söka delbelopp <small>Varje sökande anger hur mycket de behöver. Det som beviljas dras från potten.</small></span></label>
-        <label class="radio"><input type="radio" name="mode" checked=${finMode === 'single'} disabled=${hadFinance} onChange=${() => setFinMode('single')} />
-          <span>En mottagare får hela summan</span></label>
-        <label>Ligger uppe till och med<input type="date" value=${finEnd} min=${plusDays(0)} onInput=${(e) => setFinEnd(e.target.value)} /></label>
+      ${type === 'finansiering' && html`<section class="field fin-form simple">
+        <div class="inline2">
+          <label>${{ behovs: 'Hur mycket behövs?', finns: 'Hur mycket finns?', tips: 'Belopp' }[stance] || 'Belopp'} <small class="muted">(valfritt)</small>
+            <input inputmode="numeric" value=${amount} onInput=${(e) => setAmount(e.target.value)} placeholder="t.ex. 20 000" /></label>
+          <label>${stance === 'behovs' ? 'Behövs senast' : 'Sista dag att söka'} <small class="muted">(valfritt)</small>
+            <input type="date" value=${deadline} onInput=${(e) => setDeadline(e.target.value)} /></label>
+        </div>
+        <small class="muted">${{ behovs: 'Den som kan hjälpa till svarar i kommentarerna.', finns: 'Den som vill söka svarar i kommentarerna – eller via länken du skriver i texten.', tips: 'Klistra in en länk i texten, så hittar andra dit.' }[stance]}</small>
       </section>`}
 
       ${type === 'lokal' && html`<section class="field">
-        <div class="label">Vad är det, och vad kan det användas till?</div>
-        <${ChipPicker} options=${spaceOptions.data || DEFAULT_FUNCTIONS} selected=${functions} onChange=${setFunctions} placeholder="T.ex. borrmaskin, kök, släpvagn…" />
-        <div class="label">Vad kostar det?</div>
+        <div class="label">${stance === 'behovs' ? 'Vad behövs?' : 'Vad är det, och vad kan det användas till?'}</div>
+        <${ChipPicker} options=${spaceOptions.data || DEFAULT_FUNCTIONS} selected=${functions} onChange=${setFunctions} placeholder=${stance === 'behovs' ? 'T.ex. sladdvinda, släpvagn, lokal…' : 'T.ex. borrmaskin, kök, släpvagn…'} />
+        ${stance !== 'behovs' && html`<div class="label">Vad kostar det?</div>
         ${Object.entries(SPACE_COSTS).map(([k, label]) => html`<label class="radio" key=${k}>
           <input type="radio" name="cost" checked=${cost === k} onChange=${() => setCost(k)} /><span>${label}</span></label>`)}
-        ${cost === 'kostar' && html`<label>Pris<input value=${price} onInput=${(e) => setPrice(e.target.value)} placeholder="t.ex. 200 kr per dag" /></label>`}
+        ${cost === 'kostar' && html`<label>Pris<input value=${price} onInput=${(e) => setPrice(e.target.value)} placeholder="t.ex. 200 kr per dag" /></label>`}`}
+        ${stance === 'behovs' && html`<small class="muted">Den som har något att låna ut svarar i kommentarerna.</small>`}
       </section>`}
 
       ${type === 'evenemang' && html`<section class="field event-form">

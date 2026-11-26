@@ -1112,3 +1112,19 @@ button.row { width: 100%; text-align: left; }
 .textpost.long { display: block; text-align: left; font-size: 15px; line-height: 1.5; min-height: 0; padding: 16px 18px; }
 .textpost.long .see-more { font-size: 14px; }
 .post, .post-body, .feed { min-width: 0; max-width: 100%; }
+
+/* Flikarna: Behövs/Finns/Tips och knappen för att lägga upp */
+.tab-head { display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 4px; }
+.tab-head .tab-info { margin: 0; padding: 0 4px; background: none; }
+.stance-switch { display: flex; background: var(--bg-soft); border-radius: 999px; padding: 3px; gap: 2px; }
+.stance-switch button { flex: 1; padding: 7px 8px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.stance-switch button.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.post-here { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px; border: 1.5px dashed var(--accent); color: var(--accent); font-weight: 600; font-size: 14.5px; background: var(--accent-soft); }
+.post-here-plus { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 18px; line-height: 1; flex: none; }
+.money-info { margin: 6px 0 0; font-size: 14px; }
+.money-info span { color: var(--muted); }
+.bio { margin: 4px 0 2px; font-size: 14px; white-space: pre-wrap; }
+.bio .see-more { font-size: 13.5px; }
+.inline2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fin-form.simple { display: flex; flex-direction: column; gap: 6px; }
+.compose .stance-switch { margin-top: -6px; }

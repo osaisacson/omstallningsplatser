@@ -5,6 +5,19 @@ export const postType = (p) => p.kind || (p.fin_total != null ? 'finansiering' :
 // Resurser (sparas som typen "lokal"): vad det är och vad det kostar. Lokaler, verktyg, maskiner, mark, fordon …
 export const DEFAULT_FUNCTIONS = ['Lokal', 'Verktyg', 'Maskin', 'Fordon', 'Mark', 'Verkstad', 'Kök', 'Möteslokal', 'Förråd', 'Odling', 'Övernattning'];
 export const SPACE_COSTS = { gratis: 'Gratis', gentjanst: 'Mot gentjänst', kostar: 'Kostar' };
+// Finansiering och resurser: något behövs, något finns – eller (finansiering) ett tips om var pengar finns.
+export const STANCES = {
+  finansiering: { behovs: 'Behövs', finns: 'Finns', tips: 'Tips' },
+  lokal: { behovs: 'Behövs', finns: 'Finns' },
+};
+export const stanceOf = (p) => p.stance || (postType(p) === 'lokal' || postType(p) === 'finansiering' ? 'finns' : null);
+// Märket på inlägget, t.ex. "Behövs pengar", "Finns att låna", "Tips".
+export function stanceBadge(p) {
+  const k = postType(p), st = stanceOf(p);
+  if (k === 'finansiering') return { behovs: 'Pengar behövs', finns: 'Pengar finns', tips: 'Tips om pengar' }[st];
+  if (k === 'lokal') return st === 'behovs' ? 'Behövs' : 'Finns att låna';
+  return null;
+}
 
 // Plats: flödet kan visas för en stadsdel, en stad, en region, ett land eller hela världen.
 // En stadsdel anges med postnummer (hela, fem siffror i Sverige).
@@ -252,16 +265,15 @@ export function normalizePostInput(input) {
   const caption = (input.caption || '').trim();
   if (!slides.length && !caption) throw new Error('Lägg till minst en bild eller lite text.');
   let finance = null, space = null;
-  if (kind === 'finansiering') {
-    const total = Number(input.finance?.total);
-    if (!(total > 0)) throw new Error('Ange hur mycket pengar som finns att söka.');
-    const mode = input.finance?.mode === 'single' ? 'single' : 'split';
-    finance = { total, mode, expiresAt: input.finance?.expiresAt || null };
-  }
+  // Finansiering och resurser: behövs / finns (/ tips). Belopp och sista dag är valfria – resten i kommentarerna.
+  const stance = STANCES[kind] ? (STANCES[kind][input.stance] ? input.stance : 'finns') : null;
+  const amountNum = Number(String(input.amount ?? '').replace(/[\s kr]/g, ''));
+  const amount = kind === 'finansiering' && input.amount !== '' && input.amount != null && amountNum >= 0 ? amountNum : null;
+  const deadline = kind === 'finansiering' || kind === 'lokal' ? (input.deadline || null) : null;
   if (kind === 'lokal') {
     const functions = clean(input.space?.functions);
-    if (!functions.length) throw new Error('Ange minst en sak som beskriver resursen.');
-    const cost = SPACE_COSTS[input.space?.cost] ? input.space.cost : 'gratis';
+    if (!functions.length) throw new Error(stance === 'behovs' ? 'Skriv vad som behövs.' : 'Ange minst en sak som beskriver resursen.');
+    const cost = stance === 'behovs' ? null : SPACE_COSTS[input.space?.cost] ? input.space.cost : 'gratis';
     space = { functions, cost, price: cost === 'kostar' ? (input.space?.price || '').trim() || null : null };
   }
   let event = null;
@@ -278,7 +290,7 @@ export function normalizePostInput(input) {
   const place = !input.groupId && input.place ? { country: input.place.country || null, region: input.place.region || null, city: input.place.city || null, postcode: input.place.postcode || null } : null;
   const visibleTo = [...new Set((input.visibleTo || []).filter(Boolean))];
   const reach = REACH_LEVELS.includes(input.reach) ? input.reach : null;
-  return { reach, visibleTo, place, groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
+  return { stance, amount, deadline, reach, visibleTo, place, groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
 }
 
 export async function resizeImage(file, max = 1280, quality = 0.82) {

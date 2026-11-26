@@ -31,7 +31,7 @@ function route({ parts: [a, b, c], query }) {
     case 'feedback': return b ? html`<${FeedbackView} id=${b} />` : html`<${Feedback} />`;
     case 'sok': return html`<${Search} tab=${query.get('flik')} tags=${query.get('tagg')} />`;
     case 'minne': return html`<${Memory} theme=${b ? decodeURIComponent(b) : null} />`;
-    case 'ny': return html`<${Compose} groupId=${query.get('grupp')} type=${query.get('typ')} />`;
+    case 'ny': return html`<${Compose} groupId=${query.get('grupp')} type=${query.get('typ')} stance=${query.get('stance')} />`;
     case 'notiser': return html`<${Notifications} />`;
     case 'karta': return html`<${MapView} />`;
     case 'kalender': return html`<${Home} tab="evenemang" />`;   // gamla länkar

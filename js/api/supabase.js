@@ -178,11 +178,12 @@ export const api = {
   async touch() { if (meId) await sb.rpc('touch'); },
   // Börjar ett besök (om man varit borta mer än 30 min) och svarar när man var här förra gången.
   async beginVisit() { if (!meId) return null; return ok(await sb.rpc('begin_visit')); },
-  async updateProfile({ name, nickname, avatarFile, home }) {
+  async updateProfile({ name, nickname, bio, avatarFile, home }) {
     if (home) ok(await sb.from('home_places').upsert({ user_id: needMe(), ...cleanHome(home), updated_at: new Date().toISOString() }));
     const patch = {};
     if (name?.trim()) patch.name = name.trim();
     if (nickname !== undefined) patch.nickname = nickname.trim() || null;
+    if (bio !== undefined) patch.bio = bio.trim().slice(0, 600) || null;
     if (avatarFile) patch.avatar_url = await upload(avatarFile, 400);
     if (Object.keys(patch).length) ok(await sb.from('profiles').update(patch).eq('id', needMe()));
   },
@@ -194,7 +195,7 @@ export const api = {
     return ok(await query);
   },
   async getUser(id) {
-    const p = ok(await sb.from('profiles').select(`${PROFILE}, nickname, created_at, group_members!group_members_user_id_fkey(role, verified, group:groups(id,name,avatar_url,verified_at,locked))`).eq('id', id).single());
+    const p = ok(await sb.from('profiles').select(`${PROFILE}, nickname, bio, created_at, group_members!group_members_user_id_fkey(role, verified, group:groups(id,name,avatar_url,verified_at,locked))`).eq('id', id).single());
     const { group_members, ...rest } = p;
     const ed = ok(await sb.from('editors').select('accepted_at').eq('user_id', id))[0];
     const editor = !!ed?.accepted_at;
@@ -285,7 +286,7 @@ export const api = {
     const v = normalizePostInput(input);
     await ensureCategories(v.categories);
     const post = ok(await sb.from('posts').insert({
-      author_id: needMe(), group_id: v.groupId, as_group: v.asGroup, visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
+      author_id: needMe(), group_id: v.groupId, as_group: v.asGroup, visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories,
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event),
       fin_total: v.finance?.total ?? null, fin_mode: v.finance?.mode ?? null, fin_expires_at: v.finance?.expiresAt ?? null,
     }).select('id').single());
@@ -297,7 +298,7 @@ export const api = {
     await ensureCategories(v.categories);
     const current = ok(await sb.from('posts').select('fin_total').eq('id', id).single());
     if (current.fin_total != null && !v.finance) throw new Error('Ett finansieringsinlägg kan inte byta typ. Stäng det i stället via ··· på inlägget.');
-    const patch = { group_id: v.groupId, as_group: v.asGroup, visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: new Date().toISOString(),
+    const patch = { group_id: v.groupId, as_group: v.asGroup, visible_to: v.visibleTo?.length ? v.visibleTo : null, reach: v.reach, stance: v.stance, amount: v.amount, deadline: v.deadline, ...placeCols(v), caption: v.caption, kind: v.kind, is_resource: v.isResource, categories: v.categories, updated_at: new Date().toISOString(),
       space_functions: v.space?.functions || [], space_cost: v.space?.cost ?? null, space_price: v.space?.price ?? null, ...eventColumns(v.event) };
     if (v.finance) {
       if (current.fin_total == null) Object.assign(patch, { fin_total: v.finance.total, fin_mode: v.finance.mode });

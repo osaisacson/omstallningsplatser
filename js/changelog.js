@@ -2,6 +2,10 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-26T13:34', 'Skriv något om dig själv på din profil.'],
+  ['2026-11-26T13:34', 'Flödet visar vanliga inlägg; finansiering, resurser och evenemang har egna flikar med en knapp för att lägga upp.'],
+  ['2026-11-26T13:34', 'Resurser: Behövs eller Finns – efterlys t.ex. en sladdvinda och få svar i kommentarerna.'],
+  ['2026-11-26T13:34', 'Finansiering är enklare: Behövs, Finns eller Tips, med valfritt belopp och sista dag.'],
   ['2026-11-26T13:25', 'Appen startar snabbare: flödet du såg senast visas direkt och de första inläggen hämtas först.'],
   ['2026-11-26T13:21', 'Långa inlägg visas med ”… se mer”, och långa länkar kortas så att sidan inte flyter ut.'],
   ['2026-11-25T07:05', 'Bocken visas på gruppernas bilder på profilen – där man är verifierad – och admin står diskret under.'],

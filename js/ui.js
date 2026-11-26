@@ -3,7 +3,7 @@ import { html, useState, useEffect, useRef } from './lib.js';
 import { api } from './api/index.js';
 import { SUPABASE_URL } from './config.js';
 import { state, go, goBack, toast, refreshBadges, refreshMe, attempt, useAsync } from './store.js';
-import { fmtKr, fmtDate, timeAgo, PAYOUT_BANK_LIMIT, SPACE_COSTS, postType, fmtEventTime, eventTitle, calendarSubscribed, MEMORY_THEMES, plainText, toEditable, fromEditable } from './util.js';
+import { fmtKr, fmtDate, timeAgo, PAYOUT_BANK_LIMIT, SPACE_COSTS, postType, fmtEventTime, eventTitle, calendarSubscribed, MEMORY_THEMES, stanceBadge, stanceOf, plainText, toEditable, fromEditable } from './util.js';
 
 const ICONS = {
   home: '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
@@ -564,7 +564,7 @@ export async function sharePost(p) {
 }
 
 // Lång text: visas med de första raderna och "… se mer" (på inläggets egen sida visas allt).
-export function ClampText({ text, lines = 4, full = false, className = 'caption' }) {
+export function ClampText({ text, lines = 4, full = false, className = 'caption', more = '… se mer' }) {
   const ref = useRef();
   const [open, setOpen] = useState(full);
   const [over, setOver] = useState(false);
@@ -579,7 +579,7 @@ export function ClampText({ text, lines = 4, full = false, className = 'caption'
   }, [text, open]);
   return html`<div class=${className + (open ? '' : ' clamped')}>
     <div ref=${ref} class="clamp-body" style=${open ? '' : `-webkit-line-clamp: ${lines}`}>${linkify(text)}</div>
-    ${!open && over && html`<button type="button" class="see-more" onClick=${(e) => { e.stopPropagation(); setOpen(true); }}>… se mer</button>`}
+    ${!open && over && html`<button type="button" class="see-more" onClick=${(e) => { e.stopPropagation(); setOpen(true); }}>${more}</button>`}
   </div>`;
 }
 
@@ -588,7 +588,7 @@ export function PostCard({ post: p, onChange, full = false }) {
   const edited = new Date(p.updated_at) - new Date(p.created_at) > 60e3;
   // Märke uppe till höger på bilden för finansiering och resurser.
   const kind = postType(p);
-  const badge = p.is_event ? 'Evenemang' : kind === 'finansiering' ? 'Finansiering' : kind === 'lokal' ? 'Resurs' : null;
+  const badge = p.is_event ? 'Evenemang' : stanceBadge(p);
   return html`<article class="post">
     <${PostHead} post=${p}><${PostMenu} post=${p} onChange=${onChange} /><//>
     ${p.slides.length ? html`<${Carousel} slides=${p.slides} badge=${badge} />`
@@ -597,8 +597,10 @@ export function PostCard({ post: p, onChange, full = false }) {
         : html`<div class="textpost">${badge && html`<span class="img-badge corner-solo">${badge}</span>`}${linkify(p.caption)}</div>`}
     <div class="post-body">
       ${p.slides.length > 0 && p.caption && html`<${ClampText} text=${p.caption} lines=${4} full=${full} className="caption" />`}
-      ${kind === 'lokal' && html`<p class="space-info">${(p.space_functions || []).join(' · ')}
-        <span class="space-cost">${SPACE_COSTS[p.space_cost] || ''}${p.space_cost === 'kostar' && p.space_price ? `: ${p.space_price}` : ''}</span></p>`}
+      ${kind === 'lokal' && html`<p class="space-info">${stanceOf(p) === 'behovs' && html`<b>Behövs: </b>`}${(p.space_functions || []).join(' · ')}
+        ${stanceOf(p) !== 'behovs' && html`<span class="space-cost">${SPACE_COSTS[p.space_cost] || ''}${p.space_cost === 'kostar' && p.space_price ? `: ${p.space_price}` : ''}</span>`}</p>`}
+      ${kind === 'finansiering' && !p.finance && (p.amount != null || p.deadline) && html`<p class="money-info">
+        ${p.amount != null && html`<b>${fmtKr(p.amount)}</b>`}${p.amount != null && p.deadline && ' · '}${p.deadline && html`<span>Senast ${new Date(p.deadline).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long' })}</span>`}</p>`}
       ${kind === 'vanlig' && p.categories?.length > 0 && html`<p class="topics">${p.categories.map((c) => html`<a href=${'#/sok?flik=poster&tagg=' + encodeURIComponent(c.toLowerCase())} title=${`Visa inlägg med #${c.toLowerCase()}`}>#${c.toLowerCase()}</a>`)}</p>`}
       ${p.is_event && p.event_start && html`<${EventBox} post=${p} />`}
       ${p.finance && html`<${FinanceBox} post=${p} onApply=${() => setApplying(true)} />`}

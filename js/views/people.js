@@ -3,7 +3,7 @@ import { html, useState, useEffect } from '../lib.js';
 import { api } from '../api/index.js';
 import { APP_NAME, AUTH_PROVIDERS, VAPID_PUBLIC_KEY } from '../config.js';
 import { useStore, useAsync, go, attempt, refreshMe, refreshBadges, setState, toast } from '../store.js';
-import { Icon, Count, Avatar, Header, PostGrid, GroupRow, UserRow, ImagePicker, Loading, ErrorBox, ReportForm, MoreMenu, VerifiedBadge, editorDelete } from '../ui.js';
+import { Icon, Count, Avatar, Header, PostGrid, GroupRow, UserRow, ImagePicker, Loading, ErrorBox, ReportForm, MoreMenu, VerifiedBadge, ClampText, editorDelete } from '../ui.js';
 import { Terms } from './help.js';
 import { AddEditorConfirm } from './roles.js';
 import { HomePlaceFields, checkHome, emptyHome, PlaceSwitcher } from './place.js';
@@ -217,7 +217,7 @@ export function Profile({ id }) {
         <div><b>${user.groups.length}</b><span>grupper</span></div>
       </div>
     </div>
-    <div class="profile-info"><strong>${user.name}</strong>
+    <div class="profile-info"><strong>${user.name}</strong>${user.bio && html`<${ClampText} text=${user.bio} lines=${2} className="bio" more="läs mer" />`}
       ${user.is_editor && html`<a class="role-badge" href="#/hjalp" title="Redaktionen modererar plattformen">Redaktionen</a>`}</div>
     ${(isMe || user.groups.length > 0) && html`<${GroupIcons} groups=${user.groups} canAdd=${isMe} />`}
     ${!isMe && html`<div class="profile-actions">
@@ -340,6 +340,7 @@ export function EditProfile({ section }) {
   const s = useStore();
   useEffect(() => { if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 300); }, [section]);
   const [name, setName] = useState(s.me.name);
+  const [bio, setBio] = useState(s.me.bio || '');
   const [file, setFile] = useState(null);
   const [home, setHome] = useState(() => (s.me.home ? { ...emptyHome(), ...s.me.home } : emptyHome()));
   const groups = useAsync(() => api.listGroups(), []);
@@ -347,7 +348,7 @@ export function EditProfile({ section }) {
     e.preventDefault();
     const changed = home.country && JSON.stringify(home) !== JSON.stringify(s.me.home ? { ...emptyHome(), ...s.me.home } : emptyHome());
     if (changed && checkHome(home)) return toast(checkHome(home));
-    if (await attempt(() => api.updateProfile({ name, avatarFile: file, home: changed ? home : undefined }), 'Profilen sparades')) {
+    if (await attempt(() => api.updateProfile({ name, bio, avatarFile: file, home: changed ? home : undefined }), 'Profilen sparades')) {
       await refreshMe(); go('/profil/' + s.me.id);
     }
   }
@@ -362,6 +363,8 @@ export function EditProfile({ section }) {
     <form class="form pad" onSubmit=${save}>
       <${ImagePicker} current=${s.me.avatar_url} name=${s.me.name} onFile=${setFile} label="Byt profilbild" />
       <label>Namn<input required value=${name} onInput=${(e) => setName(e.target.value)} /></label>
+      <label>Om dig <small class="muted">(valfritt – syns på din profil)</small><textarea rows="3" maxlength="600" value=${bio} onInput=${(e) => setBio(e.target.value)}
+        placeholder="Vad gör du, vad brinner du för, vad kan du hjälpa till med?"></textarea></label>
       <${HomePlaceFields} value=${home} onChange=${setHome} groups=${groups.data} />
       <small class="muted">Ingen kan se var du bor. Platsen bestämmer var appen startar, och stadsdelen kan synas som ett val i platslistan – aldrig kopplad till dig.</small>
       <button class="btn primary block">Spara</button>
