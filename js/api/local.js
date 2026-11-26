@@ -1,7 +1,7 @@
 // Demoläge: samma funktioner som supabase.js men allt sparas i webbläsarens localStorage.
 // Reglerna här speglar reglerna i supabase/setup.sql.
 import { materializeSeed } from '../seed.js';
-import { MENTION_RE, postThemes, MEMORY_THEMES, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage, blobToDataURL } from '../util.js';
+import { MENTION_RE, postThemes, MEMORY_THEMES, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage, blobToDataURL, forumSlug } from '../util.js';
 
 const KEY = 'omstallningsplatser-demo-v7';
 // Demodata sparad under appens gamla namn flyttas över.
@@ -32,6 +32,13 @@ db.feedback ??= [
 ];
 db.feedbackVotes ??= db.feedback.flatMap((f, i) => db.profiles.slice(0, 4 - i * 2).map((p) => ({ feedback_id: f.id, user_id: p.id, value: 1 })));
 db.feedbackComments ??= [];
+// Forum: samtal (o/namn). Feedbacken är o/feedback, fäst överst.
+db.forums ??= [
+  { id: uuid0(), slug: 'feedback', description: 'Förslag och problem med appen. Rösta upp det du också vill ha – Redaktionen flyttar det som ska göras till Planerade och sedan Klara.', pinned: true, created_by: null, created_at: new Date(Date.now() - 30 * 864e5).toISOString() },
+  { id: uuid0(), slug: 'solceller', description: 'Allt om solceller: leverantörer, bidrag, gemensamma inköp.', pinned: false, created_by: db.profiles[2]?.id || null, created_at: new Date(Date.now() - 5 * 864e5).toISOString() },
+];
+for (const f of db.feedback) { f.forum_id ??= db.forums[0].id; f.post_ids ??= []; f.last_activity_at ??= f.created_at; }
+for (const fo of db.forums) fo.last_activity_at ??= db.feedback.filter((f) => f.forum_id === fo.id).map((f) => f.last_activity_at).sort().at(-1) || fo.created_at;
 db.postLikes ??= [];
 db.commentLikes ??= [];
 db.chats ??= [];
@@ -172,9 +179,13 @@ function removeUser(id) {
   db.feedback.filter((f) => f.author_id === id).forEach((f) => removeFeedback(f.id));
   for (const [email, c] of Object.entries(db.credentials)) if (c.id === id) delete db.credentials[email];
 }
+const forumOf = (id) => { const f = db.forums.find((x) => x.id === id); return f ? { id: f.id, slug: f.slug, pinned: f.pinned } : null; };
+const shapeForum = (f) => ({ ...clone(f), thread_count: db.feedback.filter((t) => t.forum_id === f.id).length });
+const byActivity = (a, b) => (b.last_activity_at || '').localeCompare(a.last_activity_at || '');
+function touchThread(t) { t.last_activity_at = now(); const fo = db.forums.find((x) => x.id === t.forum_id); if (fo) fo.last_activity_at = t.last_activity_at; }
 const shapeFeedback = (f) => {
   const v = db.feedbackVotes.filter((x) => x.feedback_id === f.id);
-  return { ...clone(f), author: profileOf(f.author_id), score: v.reduce((n, x) => n + x.value, 0), ups: v.filter((x) => x.value > 0).length,
+  return { ...clone(f), author: profileOf(f.author_id), forum: forumOf(f.forum_id), score: v.reduce((n, x) => n + x.value, 0), ups: v.filter((x) => x.value > 0).length,
     downs: v.filter((x) => x.value < 0).length, my_vote: v.find((x) => x.user_id === db.session)?.value || 0,
     comment_count: db.feedbackComments.filter((c) => c.feedback_id === f.id).length };
 };
@@ -906,18 +917,52 @@ export const api = {
   },
 
   // ---- Feedback på appen ----
-  async listFeedback() { return db.feedback.map(shapeFeedback).sort((a, b) => b.created_at.localeCompare(a.created_at)); },
+  async listForums() { return [...db.forums].sort((a, b) => (b.pinned - a.pinned) || byActivity(a, b)).map(shapeForum); },
+  async getForum(slug) {
+    const f = db.forums.find((x) => x.slug === forumSlug(slug));
+    if (!f) throw new Error(`Samtalet o/${forumSlug(slug)} finns inte.`);
+    return clone(f);
+  },
+  async createForum({ slug, description }) {
+    const me = needMe(); const s = forumSlug(slug);
+    if (s.length < 2) throw new Error('Namnet behöver minst två tecken (bokstäver, siffror eller bindestreck).');
+    if (db.forums.some((x) => x.slug === s)) throw new Error(`o/${s} finns redan – gå med i det samtalet i stället.`);
+    db.forums.push({ id: uuid(), slug: s, description: (description || '').trim() || null, pinned: false, created_by: me, created_at: now(), last_activity_at: now() });
+    persist(); return s;
+  },
+  async updateForum(id, { description }) {
+    const me = needMe(); const f = db.forums.find((x) => x.id === id);
+    if (!f || (f.created_by !== me && !db.editors.includes(me))) throw new Error('Bara den som startade samtalet kan ändra det.');
+    f.description = (description || '').trim() || null; persist();
+  },
+  async searchForum(q) {
+    const t = q.trim().toLowerCase();
+    if (!t) return { forums: [], threads: [] };
+    return {
+      forums: db.forums.filter((f) => f.slug.includes(forumSlug(t) || t) || (f.description || '').toLowerCase().includes(t)).sort(byActivity).map(shapeForum),
+      threads: db.feedback.filter((f) => f.title.toLowerCase().includes(t) || (f.body || '').toLowerCase().includes(t)).sort(byActivity).slice(0, 30).map(shapeFeedback),
+    };
+  },
+  async listFeedback(forumId = null) { return db.feedback.filter((f) => !forumId || f.forum_id === forumId).map(shapeFeedback).sort(byActivity); },
   async getFeedback(id) {
     const f = db.feedback.find((x) => x.id === id);
-    if (!f) throw new Error('Inlägget finns inte (längre).');
-    return { ...shapeFeedback(f), comments: db.feedbackComments.filter((c) => c.feedback_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => ({ ...clone(c), author: profileOf(c.author_id) })) };
+    if (!f) throw new Error('Tråden finns inte (längre).');
+    return { ...shapeFeedback(f), posts: await api.postsByIds(f.post_ids || []),
+      comments: db.feedbackComments.filter((c) => c.feedback_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => ({ ...clone(c), author: profileOf(c.author_id) })) };
   },
-  async createFeedback({ title, body }) {
+  async postsByIds(ids) { return (ids || []).map((id) => db.posts.find((p) => p.id === id)).filter(Boolean).map(shapePost); },
+  async setThreadPosts(id, ids) {
+    const f = db.feedback.find((x) => x.id === id);
+    if (!f || f.author_id !== needMe()) throw new Error('Bara den som skrev tråden kan ändra den.');
+    if (ids.length > 20) throw new Error('Högst 20 inlägg per tråd.');
+    f.post_ids = [...ids]; persist();
+  },
+  async createFeedback({ title, body, forumId = null, postIds = [] }) {
     const me = needMe();
     if ((title || '').trim().length < 3) throw new Error('Skriv en rubrik (minst tre tecken).');
-    if (!(body || '').trim()) throw new Error('Beskriv förslaget eller problemet.');
-    const f = { id: uuid(), author_id: me, title: title.trim(), body: (body || '').trim(), status: null, created_at: now() };
-    db.feedback.push(f); db.feedbackVotes.push({ feedback_id: f.id, user_id: me, value: 1 });
+    const forum_id = forumId || db.forums.find((x) => x.slug === 'feedback').id;
+    const f = { id: uuid(), author_id: me, forum_id, post_ids: postIds.slice(0, 20), title: title.trim(), body: (body || '').trim(), status: null, created_at: now() };
+    db.feedback.push(f); db.feedbackVotes.push({ feedback_id: f.id, user_id: me, value: 1 }); touchThread(f);
     persist(); return f.id;
   },
   async voteFeedback(id, value) {
@@ -930,6 +975,13 @@ export const api = {
     const me = needMe();
     if (!body?.trim()) throw new Error('Skriv något först.');
     db.feedbackComments.push({ id: uuid(), feedback_id: id, parent_id: parentId, author_id: me, body: body.trim(), created_at: now() });
+    const t = db.feedback.find((x) => x.id === id);
+    if (t) {
+      touchThread(t);
+      const to = (parentId && db.feedbackComments.find((c) => c.id === parentId)?.author_id) || t.author_id;
+      if (to && to !== me) db.notifications.push({ id: uuid(), user_id: to, kind: 'forum', body: `${parentId ? 'svarade dig i' : 'kommenterade din tråd'} ”${t.title.slice(0, 60)}” i o/${forumOf(t.forum_id)?.slug}`,
+        actor_id: me, post_id: null, group_id: null, link: `#/o/${forumOf(t.forum_id)?.slug}/${t.id}`, read: false, created_at: now() });
+    }
     persist();
   },
   async deleteFeedback(id) {

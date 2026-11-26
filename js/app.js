@@ -8,7 +8,8 @@ import { GroupView, GroupSettings, GroupVerify, NewGroup, Welcome } from './view
 import { AuthView, Search, Profile, EditProfile, NewPassword } from './views/people.js';
 import { Notifications, Todos, Inbox, Thread, NewMessage, NewChat, ChatView } from './views/inbox.js';
 import { MapView } from './views/map.js';
-import { Help, Feedback, FeedbackView } from './views/help.js';
+import { Help } from './views/help.js';
+import { ForumView, ThreadView, NewForum } from './views/forum.js';
 import { InstallSheet } from './install.js';
 import { RolePrompts } from './views/roles.js';
 import { Memory } from './views/memory.js';
@@ -28,7 +29,9 @@ function route({ parts: [a, b, c], query }) {
   switch (a) {
     case undefined: return html`<${Home} />`;
     case 'hjalp': return html`<${Help} />`;
-    case 'feedback': return b ? html`<${FeedbackView} id=${b} />` : html`<${Feedback} />`;
+    case 'feedback': return b ? html`<${ThreadView} id=${b} key=${b} />` : html`<${ForumView} slug="feedback" />`;   // gamla länkar
+    case 'o': return c ? html`<${ThreadView} id=${c} key=${c} />` : html`<${ForumView} slug=${decodeURIComponent(b || 'feedback')} key=${b} />`;
+    case 'o-nytt': return html`<${NewForum} name=${query.get('namn')} />`;
     case 'sok': return html`<${Search} tab=${query.get('flik')} tags=${query.get('tagg')} />`;
     case 'minne': return html`<${Memory} theme=${b ? decodeURIComponent(b) : null} />`;
     case 'ny': return html`<${Compose} groupId=${query.get('grupp')} type=${query.get('typ')} stance=${query.get('stance')} />`;

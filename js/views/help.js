@@ -69,7 +69,7 @@ function DeleteAccount() {
 export function Help() {
   return html`<div class="page help">
     <${Header} title="Hjälp och info" />
-    <a class="feedback-banner" href="#/feedback">
+    <a class="feedback-banner" href="#/o/feedback">
       <span class="fb-icon"><${Icon} name="chat" size=${26} /></span>
       <span><strong>Tyck till om appen</strong><small>Förslag, problem och idéer – rösta på det du också vill ha.</small></span>
       <span class="fb-go">›</span>
@@ -99,17 +99,11 @@ export function Help() {
   </div>`;
 }
 
-// ---------- Feedback: som ett förenklat Reddit ----------
-// Flikar efter status (Förslag, Planerade, Klara), alltid sorterade på röster och sedan nyast.
-// Kommentarer i trådar: svara direkt under en kommentar.
+// ---------- Delar som forumet (js/views/forum.js) använder: röster, skrivfält och kommentarer i trådar ----------
 
-const TABS = [['forslag', 'Förslag', null], ['planerad', 'Planerade', 'planerad'], ['klar', 'Klara', 'klar']];
-const STATUS = [[null, 'Förslag'], ['planerad', 'Planerad'], ['klar', 'Klar']];
-const StatusChip = ({ status }) => status ? html`<span class=${'fb-status ' + status}>${status === 'klar' ? '✓ Klar' : 'Planerad'}</span>` : null;
-const byVotes = (a, b) => b.score - a.score || b.created_at.localeCompare(a.created_at);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-function Votes({ f, onChange }) {
+export function Votes({ f, onChange }) {
   const [mine, setMine] = useState(f.my_vote);
   const score = f.score - f.my_vote + mine;
   async function vote(e, v) {
@@ -125,59 +119,8 @@ function Votes({ f, onChange }) {
   </span>`;
 }
 
-// "Skapa inlägg": ser ut som ett fält, öppnas till rubrik + beskrivning.
-function NewFeedback({ onDone }) {
-  const s = useStore();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [busy, setBusy] = useState(false);
-  async function submit(e) {
-    e.preventDefault(); setBusy(true);
-    const id = await attempt(() => api.createFeedback({ title, body }), 'Publicerat – nu kan andra rösta');
-    setBusy(false);
-    if (id) { setTitle(''); setBody(''); setOpen(false); onDone(); }
-  }
-  if (!open) return html`<button class="fb-compose-closed" onClick=${() => setOpen(true)}>
-    <${Avatar} src=${s.me.avatar_url} name=${s.me.name} size=${32} /><span>Skriv ett förslag eller problem…</span></button>`;
-  return html`<form class="fb-compose" onSubmit=${submit}>
-    <input required autofocus maxlength="140" value=${title} onInput=${(e) => setTitle(e.target.value)} placeholder="Rubrik – en sak per inlägg" aria-label="Rubrik" />
-    <textarea required rows="4" maxlength="4000" value=${body} onInput=${(e) => setBody(e.target.value)} aria-label="Beskrivning"
-      placeholder="Beskriv mer: vad vill du kunna göra, eller vad hände och vad hade du väntat dig?"></textarea>
-    <div class="fb-compose-actions"><button type="button" class="btn small" onClick=${() => setOpen(false)}>Avbryt</button>
-      <button class="btn small primary" disabled=${busy || title.trim().length < 3 || !body.trim()}>${busy ? 'Publicerar…' : 'Publicera'}</button></div>
-  </form>`;
-}
-
-export function Feedback() {
-  const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('fb-tab') || 'forslag'; } catch { return 'forslag'; } });
-  const list = useAsync(() => api.listFeedback(), []);
-  const choose = (t) => { setTab(t); try { sessionStorage.setItem('fb-tab', t); } catch {} };
-  const status = TABS.find(([k]) => k === tab)[2];
-  const all = list.data || [];
-  const items = all.filter((f) => (f.status || null) === status).sort(byVotes);
-  const count = (st) => all.filter((f) => (f.status || null) === st).length;
-  return html`<div class="page feedback">
-    <${Header} title="Feedback" back />
-    <p class="fb-intro">Förslag och problem med appen. <b>Rösta upp</b> det du också vill ha, <b>ner</b> det du tycker är en dålig idé, och kommentera för att utveckla.
-      Redaktionen flyttar det som ska göras till <b>Planerade</b> och sedan till <b>Klara</b>.</p>
-    <div class="fb-compose-wrap"><${NewFeedback} onDone=${() => { choose('forslag'); list.reload(); }} /></div>
-    <div class="filterbar fb-tabs" role="tablist">${TABS.map(([k, label, st]) => html`<button role="tab" aria-selected=${tab === k} class=${tab === k ? 'on' : ''} onClick=${() => choose(k)}>
-      ${label}${list.data ? html` <span class="tab-n">${count(st)}</span>` : ''}</button>`)}</div>
-    ${list.loading && !list.data ? html`<${Loading} />` : list.error ? html`<${ErrorBox} error=${list.error} />`
-      : !items.length ? html`<p class="empty">${{ forslag: 'Inga förslag än – bli först!', planerad: 'Inget är planerat just nu.', klar: 'Inget är klart än.' }[tab]}</p>`
-      : html`<div class="fb-list">${items.map((f) => html`<a class="fb-card" href=${'#/feedback/' + f.id} key=${f.id}>
-          <span class="fb-meta"><${Avatar} src=${f.author?.avatar_url} name=${f.author?.name || '?'} size=${20} /> ${f.author?.name || 'Borttagen'} · ${timeAgo(f.created_at)}</span>
-          <strong class="fb-title">${f.title}</strong>
-          ${f.body && html`<span class="fb-excerpt">${f.body}</span>`}
-          <span class="fb-bar"><${Votes} f=${f} onChange=${list.reload} />
-            <span class="pill"><${Icon} name="chat" size=${16} /> ${f.comment_count}</span></span>
-        </a>`)}</div>`}
-  </div>`;
-}
-
 // Skrivfältet för kommentarer och svar: litet tills man trycker i det.
-function Reply({ onSend, onCancel, autofocus = false, placeholder = 'Lägg till en kommentar' }) {
+export function Reply({ onSend, onCancel, autofocus = false, placeholder = 'Lägg till en kommentar' }) {
   const [open, setOpen] = useState(autofocus);
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
@@ -194,7 +137,7 @@ function Reply({ onSend, onCancel, autofocus = false, placeholder = 'Lägg till 
   </form>`;
 }
 
-function Comment({ c, kids, me, editor, feedbackId, reload }) {
+export function Comment({ c, kids, me, editor, feedbackId, reload }) {
   const [replying, setReplying] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const children = kids[c.id] || [];
@@ -218,52 +161,5 @@ function Comment({ c, kids, me, editor, feedbackId, reload }) {
           ${children.map((k) => html`<${Comment} key=${k.id} c=${k} kids=${kids} me=${me} editor=${editor} feedbackId=${feedbackId} reload=${reload} />`)}`}
       </div>
     </div>
-  </div>`;
-}
-
-export function FeedbackView({ id }) {
-  const s = useStore();
-  const f = useAsync(() => api.getFeedback(id), [id]);
-  const [reporting, setReporting] = useState(false);
-  const x = f.data;
-  const mine = x?.author_id === s.me.id;
-  const kids = {};
-  for (const c of x?.comments || []) (kids[c.parent_id || 'root'] ||= []).push(c);
-  async function del() {
-    if (!confirm(mine ? 'Ta bort ditt inlägg?' : 'Ta bort inlägget som Redaktionen? Det syns i historiken.')) return;
-    if (await attempt(() => api.deleteFeedback(id), 'Borttaget')) go('/feedback');
-  }
-  async function setStatus(st) {
-    if ((x.status || null) === st) return;
-    if (await attempt(() => api.setFeedbackStatus(id, st), st ? `Flyttat till ${st === 'klar' ? 'Klara' : 'Planerade'}` : 'Flyttat till Förslag')) f.reload();
-  }
-  return html`<div class="page feedback">
-    <${Header} title="Feedback" back />
-    ${f.loading && !x ? html`<${Loading} />` : f.error ? html`<${ErrorBox} error=${f.error} />` : html`
-      <article class="fb-post">
-        <span class="fb-meta"><${Avatar} src=${x.author?.avatar_url} name=${x.author?.name || '?'} size=${24} />
-          <a href=${'#/profil/' + x.author?.id}>${x.author?.name}</a> · ${timeAgo(x.created_at)} <${StatusChip} status=${x.status} /></span>
-        <h2>${x.title}</h2>
-        <p class="fb-body">${linkify(x.body)}</p>
-        <div class="fb-bar">
-          <${Votes} f=${x} />
-          <span class="pill"><${Icon} name="chat" size=${16} /> ${x.comments.length}</span>
-          <span class="fb-more">
-            ${(mine || s.me.is_editor) && html`<button class="link small muted" onClick=${del}>Ta bort</button>`}
-            ${!mine && html`<button class="link small muted" onClick=${() => setReporting(true)}>Anmäl</button>`}
-          </span>
-        </div>
-        ${s.me.is_editor && html`<div class="fb-status-set">
-          <span class="muted small">Redaktionen:</span>
-          <div class="seg" role="radiogroup" aria-label="Status">${STATUS.map(([st, label]) => html`<button role="radio" aria-checked=${(x.status || null) === st}
-            class=${(x.status || null) === st ? 'on' : ''} onClick=${() => setStatus(st)}>${label}</button>`)}</div>
-        </div>`}
-      </article>
-      <div class="fb-comments">
-        <${Reply} onSend=${async (b) => { const ok = await attempt(() => api.commentFeedback(id, b)); if (ok) f.reload(); return ok; }} />
-        ${!x.comments.length && html`<p class="muted small fb-none">Inga kommentarer än. Vad tycker du?</p>`}
-        ${(kids.root || []).map((c) => html`<${Comment} key=${c.id} c=${c} kids=${kids} me=${s.me.id} editor=${s.me.is_editor} feedbackId=${id} reload=${f.reload} />`)}
-      </div>
-      ${reporting && html`<${ReportForm} kind="feedback" id=${id} name=${x.title.slice(0, 60)} onClose=${() => setReporting(false)} />`}`}
   </div>`;
 }

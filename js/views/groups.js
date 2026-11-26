@@ -44,7 +44,8 @@ export function GroupView({ id }) {
   // En grupp utan admin sköts av Redaktionen.
   const admin = s.adminOf.has(id) || (!hasAdmin && s.me.is_editor && !grp.locked);
   const list = posts.data || [];
-  const cover = (h) => list.find((p) => p.id === h.post_ids[0] && p.slides[0])?.slides[0].image_url;
+  const cover = (h) => list.find((p) => p.id === h.post_ids[0] && p.slides[0])?.slides[0];
+  const coverUrl = (h) => { const s = cover(h); return s ? s.thumb_url || s.image_url : null; };
   const reload = () => { g.reload(); posts.reload(); };
   // Grupp utan admin (t.ex. hämtad från byggemenskaper.se): en ruta överst om var den kommer ifrån och hur man blir admin.
   const pending = (mine.data || []).some((r) => r.group_id === id && r.status === 'pending');
@@ -107,7 +108,7 @@ export function GroupView({ id }) {
       ${member && html`<button class="mini" onClick=${() => setHl({ highlight: { title: '', description: '', post_ids: [] }, edit: true })}>
         <span class="hl-cover new">+</span><span>Nytt</span></button>`}
       ${grp.highlights.map((h) => html`<button class="mini" key=${h.id} onClick=${() => setHl({ highlight: h, edit: false })}>
-        <span class="hl-cover">${cover(h) ? html`<img src=${cover(h)} alt="" loading="lazy" decoding="async" />` : h.title[0]}</span><span>${h.title}</span></button>`)}
+        <span class="hl-cover">${coverUrl(h) ? html`<img src=${coverUrl(h)} alt="" loading="lazy" decoding="async" />` : h.title[0]}</span><span>${h.title}</span></button>`)}
     </div>`}
 
     <div class="grid-sep"></div>
@@ -169,7 +170,7 @@ function HighlightEditor({ groupId, highlight, posts, onClose, onSaved }) {
       <div class="label small">Välj inlägg (${ids.length} valda)</div>
       ${posts.length === 0 ? html`<p class="muted">Gruppen har inga inlägg än.</p>` : html`<div class="grid pick">
         ${posts.map((p) => html`<button type="button" key=${p.id} class=${'tile' + (ids.includes(p.id) ? ' picked' : '')} onClick=${() => toggle(p.id)}>
-          ${p.slides[0] ? html`<img src=${p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${plainText(p.caption)}</span>`}
+          ${p.slides[0] ? html`<img src=${p.slides[0].thumb_url || p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${plainText(p.caption)}</span>`}
           ${ids.includes(p.id) && html`<span class="tick">${ids.indexOf(p.id) + 1}</span>`}</button>`)}</div>`}
       <button class="btn primary block">Spara</button>
       ${highlight.id && html`<button type="button" class="link danger center" onClick=${del}>Ta bort projektet</button>`}

@@ -2,7 +2,7 @@
 // Biblioteket laddas av api/index.js som en enda fil (window.supabase).
 const { createClient } = window.supabase;
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
-import { postThemes, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage } from '../util.js';
+import { postThemes, financeSummary, visibleInFeed, normalizePostInput, normalizeUrl, geocode, eventColumns, sortCategories, resizeImage, tinyPlaceholder, forumSlug } from '../util.js';
 
 // Kommer man hit via länken i ett "återställ lösenord"-mejl står det type=recovery i adressen.
 // Läses av innan Supabase hinner ta bort det.
@@ -42,7 +42,7 @@ async function uploadVideo(file) {
   if (file.size > VIDEO_MAX) throw new Error('Videon är för stor – högst 50 MB. Korta den eller spela in i lägre kvalitet.');
   const ext = (file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
   const path = `${needMe()}/${crypto.randomUUID()}.${ext}`;
-  ok(await sb.storage.from('media').upload(path, file, { contentType: file.type || 'video/mp4' }));
+  ok(await sb.storage.from('media').upload(path, file, { contentType: file.type || 'video/mp4', cacheControl: '31536000' }));
   return sb.storage.from('media').getPublicUrl(path).data.publicUrl;
 }
 // Märker vilka författare som är verifierade medlemmar i inläggets grupp.
@@ -63,15 +63,28 @@ async function markVerified(posts) {
   }
   return posts;
 }
+// Filnamnen är unika och ändras aldrig – därför får webbläsaren spara bilderna i ett år.
+const FOREVER = '31536000';
 async function upload(file, max = 1280) {
   const blob = await resizeImage(file, max);
   const path = `${needMe()}/${crypto.randomUUID()}.jpg`;
-  ok(await sb.storage.from('media').upload(path, blob, { contentType: 'image/jpeg' }));
+  ok(await sb.storage.from('media').upload(path, blob, { contentType: 'image/jpeg', cacheControl: FOREVER }));
   return sb.storage.from('media').getPublicUrl(path).data.publicUrl;
+}
+// Bilder i inlägg: en stor (1280 px), en liten (640 px) för mindre skärmar och en suddig förhandsbild som visas direkt.
+async function uploadPostImage(file) {
+  const id = crypto.randomUUID(), dir = needMe();
+  const [big, small] = await Promise.all([resizeImage(file, 1280, 0.8), resizeImage(file, 640, 0.74)]);
+  const put = async (name, blob) => { ok(await sb.storage.from('media').upload(`${dir}/${name}`, blob, { contentType: 'image/jpeg', cacheControl: FOREVER })); return sb.storage.from('media').getPublicUrl(`${dir}/${name}`).data.publicUrl; };
+  const [image_url, thumb_url] = await Promise.all([put(`${id}.jpg`, big), put(`${id}-640.jpg`, small)]);
+  const local = URL.createObjectURL(small);
+  const placeholder = await tinyPlaceholder(local).catch(() => null);
+  URL.revokeObjectURL(local);
+  return { image_url, thumb_url, placeholder };
 }
 
 const PROFILE = 'id,name,avatar_url';
-const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,text,media_type), post_likes(user_id), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles!comments_author_id_fkey(id,name),group:groups(id,name)), memory_votes(user_id,theme,themes,created_at), event_rsvps(user_id,status)`;
+const POST_SELECT = `*, author:profiles!posts_author_id_fkey(${PROFILE}), group:groups(id,name,avatar_url,city,region,country,postcode), slides:post_slides(id,position,image_url,thumb_url,placeholder,text,media_type), post_likes(user_id), comments(id,applied_amount,status,body,created_at,parent_id,author:profiles!comments_author_id_fkey(id,name),group:groups(id,name)), memory_votes(user_id,theme,themes,created_at), event_rsvps(user_id,status)`;
 
 function shapePost(p) {
   const cs = p.comments || [];
@@ -117,8 +130,9 @@ async function writeSlides(postId, slides) {
   ok(await del);
   for (const [i, s] of slides.entries()) {
     const video = s.file ? s.file.type.startsWith('video/') : s.media_type === 'video';
-    const row = { post_id: postId, position: i, text: (s.text || '').trim(), media_type: video ? 'video' : 'image',
-      image_url: s.file ? await (video ? uploadVideo(s.file) : upload(s.file)) : s.image_url };
+    const media = !s.file ? { image_url: s.image_url, thumb_url: s.thumb_url ?? null, placeholder: s.placeholder ?? null }
+      : video ? { image_url: await uploadVideo(s.file), thumb_url: null, placeholder: null } : await uploadPostImage(s.file);
+    const row = { post_id: postId, position: i, text: (s.text || '').trim(), media_type: video ? 'video' : 'image', ...media };
     if (s.id) ok(await sb.from('post_slides').update(row).eq('id', s.id));
     else ok(await sb.from('post_slides').insert(row));
   }
@@ -511,21 +525,59 @@ export const api = {
   async editorDelete(kind, id) { ok(await sb.rpc('editor_delete', { p_kind: kind, p_id: id })); },
   async deleteMyAccount() { ok(await sb.rpc('delete_my_account')); await sb.auth.signOut(); meId = null; },
 
-  // ---- Feedback på appen ----
-  async listFeedback() {
-    const rows = ok(await sb.from('feedback').select(`*, author:profiles!feedback_author_id_fkey(${PROFILE}), feedback_votes(user_id,value), feedback_comments(count)`).order('created_at', { ascending: false }).limit(300));
-    return rows.map(shapeFeedback);
+  // ---- Forum: samtal (o/namn) med trådar. Feedbacken är samtalet o/feedback. ----
+  async listForums() {
+    const rows = ok(await sb.from('forums').select('*, feedback(count)').order('pinned', { ascending: false }).order('last_activity_at', { ascending: false }).limit(300));
+    return rows.map(({ feedback: t = [], ...f }) => ({ ...f, thread_count: t[0]?.count ?? 0 }));
+  },
+  async getForum(slug) {
+    const f = ok(await sb.from('forums').select('*').eq('slug', forumSlug(slug)).maybeSingle());
+    if (!f) throw new Error(`Samtalet o/${forumSlug(slug)} finns inte.`);
+    return f;
+  },
+  async createForum({ slug, description }) {
+    const s = forumSlug(slug);
+    if (s.length < 2) throw new Error('Namnet behöver minst två tecken (bokstäver, siffror eller bindestreck).');
+    const { error } = await sb.from('forums').insert({ slug: s, description: (description || '').trim() || null, created_by: needMe() });
+    if (error?.code === '23505') throw new Error(`o/${s} finns redan – gå med i det samtalet i stället.`);
+    if (error) throw error;
+    return s;
+  },
+  async updateForum(id, { description }) { ok(await sb.from('forums').update({ description: (description || '').trim() || null }).eq('id', id)); },
+  async searchForum(q) {
+    const t = q.trim().replace(/[%,()]/g, ' ');
+    if (!t) return { forums: [], threads: [] };
+    const [forums, threads] = await Promise.all([
+      sb.from('forums').select('*').or(`slug.ilike.%${forumSlug(t) || t}%,description.ilike.%${t}%`).order('last_activity_at', { ascending: false }).limit(20),
+      sb.from('feedback').select(`*, author:profiles!feedback_author_id_fkey(${PROFILE}), forum:forums(id,slug,pinned), feedback_votes(user_id,value), feedback_comments(count)`).or(`title.ilike.%${t}%,body.ilike.%${t}%`).order('last_activity_at', { ascending: false }).limit(30),
+    ]);
+    return { forums: ok(forums), threads: ok(threads).map(shapeFeedback) };
+  },
+  async listFeedback(forumId = null) {
+    let q = sb.from('feedback').select(`*, author:profiles!feedback_author_id_fkey(${PROFILE}), forum:forums(id,slug,pinned), feedback_votes(user_id,value), feedback_comments(count)`).order('last_activity_at', { ascending: false }).limit(300);
+    if (forumId) q = q.eq('forum_id', forumId);
+    return ok(await q).map(shapeFeedback);
   },
   async getFeedback(id) {
-    const f = ok(await sb.from('feedback').select(`*, author:profiles!feedback_author_id_fkey(${PROFILE}), feedback_votes(user_id,value), feedback_comments(count)`).eq('id', id).maybeSingle());
-    if (!f) throw new Error('Inlägget finns inte (längre).');
-    const comments = ok(await sb.from('feedback_comments').select(`*, author:profiles!feedback_comments_author_id_fkey(${PROFILE})`).eq('feedback_id', id).order('created_at'));
-    return { ...shapeFeedback(f), comments };
+    const f = ok(await sb.from('feedback').select(`*, author:profiles!feedback_author_id_fkey(${PROFILE}), forum:forums(id,slug,pinned), feedback_votes(user_id,value), feedback_comments(count)`).eq('id', id).maybeSingle());
+    if (!f) throw new Error('Tråden finns inte (längre).');
+    const [comments, posts] = await Promise.all([
+      sb.from('feedback_comments').select(`*, author:profiles!feedback_comments_author_id_fkey(${PROFILE})`).eq('feedback_id', id).order('created_at').then(ok),
+      api.postsByIds(f.post_ids || []),
+    ]);
+    return { ...shapeFeedback(f), comments, posts };
   },
-  async createFeedback({ title, body }) {
+  // Inlägg i den ordning de valdes. Inlägg man inte får se (eller som tagits bort) hoppas över.
+  async postsByIds(ids) {
+    if (!ids?.length) return [];
+    const ps = await markVerified(ok(await sb.from('posts').select(POST_SELECT).in('id', ids)).map(shapePost));
+    return ids.map((id) => ps.find((p) => p.id === id)).filter(Boolean);
+  },
+  async setThreadPosts(id, ids) { ok(await sb.rpc('set_thread_posts', { p_id: id, p_posts: ids })); },
+  async createFeedback({ title, body, forumId = null, postIds = [] }) {
     if ((title || '').trim().length < 3) throw new Error('Skriv en rubrik (minst tre tecken).');
-    if (!(body || '').trim()) throw new Error('Beskriv förslaget eller problemet.');
-    const f = ok(await sb.from('feedback').insert({ title: title.trim(), body: (body || '').trim(), author_id: needMe() }).select('id').single());
+    const forum_id = forumId || (await api.getForum('feedback')).id;
+    const f = ok(await sb.from('feedback').insert({ title: title.trim(), body: (body || '').trim(), author_id: needMe(), forum_id, post_ids: postIds }).select('id').single());
     ok(await sb.from('feedback_votes').insert({ feedback_id: f.id, user_id: needMe(), value: 1 }));
     return f.id;
   },

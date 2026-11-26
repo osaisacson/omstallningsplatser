@@ -2,6 +2,9 @@
 // tillkommit sen man var här förra gången (enligt kontot). Lägg nya rader överst, med tiden då ändringen
 // publicerades (svensk tid) – aldrig en tid i framtiden, då syns raden för alla tills dess.
 export const CHANGES = [
+  ['2026-11-26T16:05', 'Ny flik: Forum. Starta samtal (o/namn), skriv trådar, rösta och kommentera – och visa inlägg från appen i trådarna.'],
+  ['2026-11-26T16:05', 'Feedbacken finns nu i forumet som o/feedback, fäst överst.'],
+  ['2026-11-26T16:05', 'Bilder laddar snabbare: en suddig förhandsbild syns direkt och bilder du sett sparas i telefonen.'],
   ['2026-11-26T15:30', 'Pengar behövs är nu en insamling: stötta med valfritt belopp, se hur nära målet den är – och swisha först när den genomförs.'],
   ['2026-11-26T13:41', 'Nya inlägg är fristående som förval – välj en grupp om inlägget hör till en.'],
   ['2026-11-26T13:34', 'Skriv något om dig själv på din profil.'],

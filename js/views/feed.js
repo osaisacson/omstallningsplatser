@@ -2,6 +2,7 @@
 import { html, useState, useEffect, useRef } from '../lib.js';
 import { api } from '../api/index.js';
 import { useStore, useAsync, go, attempt, refreshBadges, refreshMe, onRefresh } from '../store.js';
+import { ForumHome } from './forum.js';
 import { useMyPledges, raiseState, Icon, Avatar, Count, Header, PostCard, Comments, Loading, ErrorBox, Sheet, GroupPicker, GroupsPicker, AddressPicker, CropModal, MentionField } from '../ui.js';
 import { PAYOUT_BANK_LIMIT, POST_TYPES, DEFAULT_FUNCTIONS, SPACE_COSTS, postType, placeLabel, inPlace, postPlace, postVisibleAt, regionName, eventColumns, zoomOut, fmtKr, visibleInFeed, canZoomOut, lookupPostcode, STANCES, stanceOf } from '../util.js';
 
@@ -121,8 +122,8 @@ const TAB_INFO = {
   lokal: { behovs: (w) => `Det här efterlyses i ${w} – har du något att låna ut?`, finns: (w) => `Lokaler, verktyg och annat att låna, använda mot en gentjänst eller hyra i ${w}.` },
 };
 // Flikar utan switch: en kort rad till vänster om plusknappen.
-const TAB_SHORT = { flode: (w) => html`Visar <b>${w}</b> · byt plats överst`, evenemang: (w) => html`Kommande evenemang i <b>${w}</b>` };
-const TABS = [['flode', 'Flöde'], ['finansiering', 'Finansiering'], ['lokal', 'Resurser'], ['evenemang', 'Events']];
+const TAB_SHORT = { flode: (w) => html`Visar <b>${w}</b> · byt plats överst`, evenemang: (w) => html`Kommande evenemang i <b>${w}</b>`, forum: () => html`Samtal om allt – senast aktiva först` };
+const TABS = [['flode', 'Flöde'], ['finansiering', 'Finansiering'], ['lokal', 'Resurser'], ['evenemang', 'Events'], ['forum', 'Forum']];
 
 // Överst under Pengar behövs: hur mycket man själv har lovat, så att man inte lovar för mycket.
 function PledgeSummary() {
@@ -163,8 +164,8 @@ export function Home({ tab: startTab }) {
   // Behövs / Finns (/ Tips) per flik – kommer ihåg valet under besöket.
   const [stances, setStances] = useState(() => { try { return { finansiering: 'finns', lokal: 'finns', ...JSON.parse(sessionStorage.getItem('stances') || '{}') }; } catch { return { finansiering: 'finns', lokal: 'finns' }; } });
   const setStance = (t, k) => setStances((x) => { const n = { ...x, [t]: k }; try { sessionStorage.setItem('stances', JSON.stringify(n)); } catch {} return n; });
-  const postHref = tab === 'flode' ? '#/ny?typ=vanlig' : tab === 'evenemang' ? '#/ny?typ=evenemang' : `#/ny?typ=${tab}&stance=${stances[tab]}`;
-  const postLabel = { flode: 'Nytt inlägg', evenemang: 'Nytt evenemang',
+  const postHref = tab === 'flode' ? '#/ny?typ=vanlig' : tab === 'evenemang' ? '#/ny?typ=evenemang' : tab === 'forum' ? '#/o-nytt' : `#/ny?typ=${tab}&stance=${stances[tab]}`;
+  const postLabel = { flode: 'Nytt inlägg', evenemang: 'Nytt evenemang', forum: 'Starta ett samtal',
     finansiering: { behovs: 'Berätta vad ni behöver pengar till', finns: 'Lägg upp pengar som går att söka', tips: 'Dela ett tips' }[stances.finansiering],
     lokal: stances.lokal === 'behovs' ? 'Efterlys något' : 'Erbjud något att låna' }[tab];
 
@@ -226,14 +227,15 @@ export function Home({ tab: startTab }) {
     </div>`}
 
     ${tab === 'flode' && posts.data && html`<${SinceLast} here=${here} posts=${posts} where=${where} />`}
-    ${tab === 'evenemang' ? html`<${EventsList} place=${place} empty=${html`<p class="empty">Inga kommande evenemang i ${where}.
+    ${tab === 'forum' ? html`<${ForumHome} />`
+      : tab === 'evenemang' ? html`<${EventsList} place=${place} empty=${html`<p class="empty">Inga kommande evenemang i ${where}.
           ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> högst upp för att zooma ut till ${placeLabel(zoomOut(place))}.</span>`}</p>`} />`
       : posts.loading && !posts.data ? html`<${FeedSkeleton} />` : posts.error ? html`<${ErrorBox} error=${posts.error} />`
       : shown.length === 0 && !posts.done ? html`<${FeedSkeleton} n=${1} />`
       : shown.length === 0 ? html`<p class="empty">${{ flode: 'Inga inlägg', finansiering: { behovs: 'Ingen som behöver pengar', finns: 'Inga pengar att söka', tips: 'Inga tips' }[stances.finansiering], lokal: stances.lokal === 'behovs' ? 'Inget efterlyst' : 'Inga resurser' }[tab]} i ${where}${(fn || cost) ? ' som matchar' : ' än'}.
           ${canZoomOut(place) && html`<br /><span class="small">Tryck på <b>‹</b> högst upp för att zooma ut till ${placeLabel(zoomOut(place))}.</span>`}</p>`
-      : html`<div class="feed">${shown.map((p) => html`<${PostCard} key=${p.id} post=${p} onChange=${posts.reload} />`)}</div>`}
-    ${tab !== 'evenemang' && posts.data && html`<${LoadMore} posts=${posts} short=${shown.length < 12} />`}
+      : html`<div class="feed">${shown.map((p, i) => html`<${PostCard} key=${p.id} post=${p} priority=${i < 2} onChange=${posts.reload} />`)}</div>`}
+    ${tab !== 'evenemang' && tab !== 'forum' && posts.data && html`<${LoadMore} posts=${posts} short=${shown.length < 12} />`}
   </div>`;
 }
 
@@ -409,7 +411,7 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
     api.getPost(editId).then((p) => {
       if (p.author_id !== s.me.id) return go('/post/' + editId);
       setType(p.is_event ? 'evenemang' : postType(p));
-      setSlides(p.slides.map((x) => ({ key: x.id, id: x.id, image_url: x.image_url, media_type: x.media_type || 'image', preview: x.image_url, text: x.text || '' })));
+      setSlides(p.slides.map((x) => ({ key: x.id, id: x.id, image_url: x.image_url, thumb_url: x.thumb_url || null, placeholder: x.placeholder || null, media_type: x.media_type || 'image', preview: x.image_url, text: x.text || '' })));
       setCaption(p.caption || ''); setGroupId(p.group_id); setPersonal(!p.group_id); setAsGroup(!!p.as_group); setVisibleTo(p.visible_to || []); setLimit(!!p.visible_to?.length); setReach(p.reach || null);
       if (p.group_id && (p.country || p.city)) setGroupWhere({ ...emptyHome(), country: p.country || '', region: p.region || '', city: p.city || '', postcode: p.postcode || null });
       if (!p.group_id && p.country) setWhere({ ...emptyHome(), country: p.country, region: p.region || '', city: p.city || '', postcode: p.postcode || null });
@@ -489,7 +491,7 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
     try {
       const payload = {
         type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : groupWhere, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], reach: limit ? null : reachLvl, caption, tags,
-        slides: slides.map(({ id, file, image_url, media_type, text }) => ({ id, file, image_url, media_type, text })),
+        slides: slides.map(({ id, file, image_url, thumb_url, placeholder, media_type, text }) => ({ id, file, image_url, thumb_url: file ? null : thumb_url, placeholder: file ? null : placeholder, media_type, text })),
         stance, amount, deadline, swish, swishName,
         space: type === 'lokal' ? { functions, cost, price } : null,
         // Saknar adressen region tas den från gruppen (samma stad) eller från andra platser i appen.

@@ -67,7 +67,7 @@ export function Notifications() {
     ${n.loading && !n.data ? html`<${Loading} />` : n.error ? html`<${ErrorBox} error=${n.error} />`
       : n.data.length === 0 ? html`<p class="empty">Inga notiser än. Här hamnar kommentarer, ansökningar och beslut.</p>`
       : html`<div class="list">${n.data.map((x) => html`<a key=${x.id} class=${'row notif' + (x.read ? '' : ' unread')}
-          href=${x.post_id ? '#/post/' + x.post_id : x.group_id ? '#/grupp/' + x.group_id : '#/'}>
+          href=${x.link ? x.link : x.post_id ? '#/post/' + x.post_id : x.group_id ? '#/grupp/' + x.group_id : '#/'}>
           ${x.actor ? html`<${Avatar} src=${x.actor.avatar_url} name=${x.actor.name} size=${40} />` : html`<span class="avatar sys">★</span>`}
           <span class="row-main"><span>${x.actor && html`<strong>${x.actor.name}</strong> `}${plainText(x.body)}</span>
             <small class="muted">${timeAgo(x.created_at)}</small></span></a>`)}</div>`}

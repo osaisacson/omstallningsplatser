@@ -8,6 +8,7 @@ import { fmtKr, fmtDate, timeAgo, PAYOUT_BANK_LIMIT, SPACE_COSTS, postType, fmtE
 const ICONS = {
   home: '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  pin: '<path d="M9 3h6l-1 6 4 4H6l4-4z"/><path d="M12 13v8"/>',
   plus: '<rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/>',
   share: '<path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3v12M7 8l5-5 5 5"/>',
   heartFill: '<path fill="currentColor" d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>',
@@ -83,7 +84,20 @@ export function Sheet({ onClose, children }) {
 }
 
 // Bildkarusell där varje bild har sin egen text.
-export function Carousel({ slides, badge = null }) {
+// En bild i ett inlägg: den suddiga förhandsbilden syns direkt, sedan tonar den riktiga bilden in.
+// Webbläsaren väljer själv liten (640 px) eller stor (1280 px) efter skärmen. De första bilderna i flödet hämtas först.
+export function PostImg({ s, priority = false }) {
+  const [loaded, setLoaded] = useState(false);
+  const ref = useRef();
+  useEffect(() => { if (ref.current?.complete && ref.current.naturalWidth) setLoaded(true); }, [s.image_url]);
+  return html`<div class=${'img-wrap' + (loaded ? ' loaded' : '')} style=${s.placeholder ? `background-image:url(${s.placeholder})` : ''}>
+    <img ref=${ref} src=${s.image_url} srcset=${s.thumb_url ? `${s.thumb_url} 640w, ${s.image_url} 1280w` : undefined}
+      sizes=${s.thumb_url ? '(min-width: 640px) 600px, 100vw' : undefined} alt=${s.text || ''}
+      loading=${priority ? 'eager' : 'lazy'} fetchpriority=${priority ? 'high' : 'auto'} decoding="async" onLoad=${() => setLoaded(true)} />
+  </div>`;
+}
+
+export function Carousel({ slides, badge = null, priority = false }) {
   const [i, setI] = useState(0);
   const ref = useRef();
   if (!slides.length) return null;
@@ -94,7 +108,7 @@ export function Carousel({ slides, badge = null }) {
       <div class="track" ref=${ref} onScroll=${onScroll}>
         ${slides.map((s, j) => html`<div class="slide">${s.media_type === 'video'
           ? html`<${AutoVideo} src=${s.image_url} active=${j === i} label=${s.text || ''} />`
-          : html`<img src=${s.image_url} alt=${s.text || ''} loading="lazy" decoding="async" />`}</div>`)}
+          : html`<${PostImg} s=${s} priority=${priority && j === 0} />`}</div>`)}
       </div>
       ${(badge || slides.length > 1) && html`<div class="corner">
         ${badge && html`<span class="img-badge">${badge}</span>`}
@@ -699,7 +713,7 @@ export function RaiseBox({ post: p, full = false, onChange }) {
   </div>`;
 }
 
-export function PostCard({ post: p, onChange, full = false }) {
+export function PostCard({ post: p, onChange, full = false, priority = false }) {
   const [applying, setApplying] = useState(false);
   const edited = new Date(p.updated_at) - new Date(p.created_at) > 60e3;
   // Märke uppe till höger på bilden för finansiering och resurser.
@@ -707,7 +721,7 @@ export function PostCard({ post: p, onChange, full = false }) {
   const badge = p.is_event ? 'Evenemang' : stanceBadge(p);
   return html`<article class="post">
     <${PostHead} post=${p}><${PostMenu} post=${p} onChange=${onChange} /><//>
-    ${p.slides.length ? html`<${Carousel} slides=${p.slides} badge=${badge} />`
+    ${p.slides.length ? html`<${Carousel} slides=${p.slides} badge=${badge} priority=${priority || full} />`
       : plainText(p.caption).length > 160
         ? html`<div class="textpost long">${badge && html`<span class="img-badge corner-solo">${badge}</span>`}<${ClampText} text=${p.caption} lines=${8} full=${full} /></div>`
         : html`<div class="textpost">${badge && html`<span class="img-badge corner-solo">${badge}</span>`}${linkify(p.caption)}</div>`}
@@ -806,7 +820,7 @@ function CommentNode({ c, post, children, depth, onChange }) {
 export function PostGrid({ posts, showAuthor = false, empty = 'Inga inlägg än.' }) {
   if (!posts.length) return html`<p class="empty">${empty}</p>`;
   return html`<div class="grid">${posts.map((p) => html`<a class="tile" href=${'#/post/' + p.id} key=${p.id}>
-    ${p.slides[0] ? html`<img src=${p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${plainText(p.caption)}</span>`}
+    ${p.slides[0] ? html`<img src=${p.slides[0].thumb_url || p.slides[0].image_url} alt="" loading="lazy" decoding="async" />` : html`<span class="tile-text">${plainText(p.caption)}</span>`}
     ${p.slides.length > 1 && html`<span class="tile-icon"><${Icon} name="layers" size=${18} /></span>`}
     ${(p.is_event || p.finance || postType(p) === 'lokal') && html`<span class="tile-kind">${p.is_event ? 'Evenemang' : p.finance ? 'Finansiering' : 'Resurs'}</span>`}
     ${showAuthor && html`<span class="tile-author"><${Avatar} src=${p.author.avatar_url} name=${p.author.name} size=${20} /></span>`}

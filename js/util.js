@@ -327,6 +327,18 @@ export async function resizeImage(file, max = 1280, quality = 0.82) {
   }
 }
 
+// En liten suddig förhandsbild (16 px bred, några hundra byte) som visas direkt medan den riktiga bilden laddas.
+// Forum: samtalens namn skrivs o/namn – små bokstäver, siffror och bindestreck.
+export function forumSlug(s) {
+  return String(s || '').toLowerCase().trim().replace(/^o\//, '').replace(/[\s_]+/g, '-').replace(/[^a-z0-9åäö-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+}
+export async function tinyPlaceholder(src) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => rej(new Error('Kunde inte läsa bilden.')); i.src = src; });
+  const w = 16, h = Math.max(1, Math.round((16 * img.naturalHeight) / img.naturalWidth));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.6);
+}
 export const blobToDataURL = (blob) => new Promise((res, rej) => {
   const r = new FileReader();
   r.onload = () => res(r.result);
