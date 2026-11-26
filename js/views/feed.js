@@ -355,7 +355,9 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
     if (best) setGroupId(best);
   }, [myPosts.data]);
   const [addingGroup, setAddingGroup] = useState(false);
-  const [editPlace, setEditPlace] = useState(false);   // fristående inlägg: platsen är ens egen, men går att ändra
+  const [editPlace, setEditPlace] = useState(false);
+  // Gruppinlägg: egen plats för just det här inlägget (annars gruppens). Nollställs när man byter grupp.
+  const [groupWhere, setGroupWhere] = useState(null);   // fristående inlägg: platsen är ens egen, men går att ändra
   const [distName, setDistName] = useState(null);
   const [tags, setTags] = useState([]);
   const [functions, setFunctions] = useState([]);
@@ -384,6 +386,7 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
       setType(p.is_event ? 'evenemang' : postType(p));
       setSlides(p.slides.map((x) => ({ key: x.id, id: x.id, image_url: x.image_url, media_type: x.media_type || 'image', preview: x.image_url, text: x.text || '' })));
       setCaption(p.caption || ''); setGroupId(p.group_id); setPersonal(!p.group_id); setAsGroup(!!p.as_group); setVisibleTo(p.visible_to || []); setLimit(!!p.visible_to?.length); setReach(p.reach || null);
+      if (p.group_id && (p.country || p.city)) setGroupWhere({ ...emptyHome(), country: p.country || '', region: p.region || '', city: p.city || '', postcode: p.postcode || null });
       if (!p.group_id && p.country) setWhere({ ...emptyHome(), country: p.country, region: p.region || '', city: p.city || '', postcode: p.postcode || null });
       setTags(p.categories || []);
       setFunctions(p.space_functions || []); setCost(p.space_cost || 'gratis'); setPrice(p.space_price || '');
@@ -410,7 +413,8 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
   const [placeMissing] = useState(() => !!checkHome(where));
   const isPersonal = personal || noGroups || !groupId;
   // Räckvidd: från inläggets plats (gruppens, eller den man angett) och utåt. Första valet är där det hör hemma.
-  const homePl = isPersonal ? where : (placeGroups.data || []).find((g) => g.id === groupId) || myGroups.find((g) => g.id === groupId) || {};
+  const groupPl = (placeGroups.data || []).find((g) => g.id === groupId) || myGroups.find((g) => g.id === groupId) || {};
+  const homePl = isPersonal ? where : groupWhere || groupPl;
   const reachOptions = [
     homePl.postcode && ['district', distName || homePl.district || 'Stadsdelen'],
     homePl.city && ['city', homePl.city],
@@ -453,10 +457,11 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
     if (!isPersonal && groupId && !s.memberOf.has(groupId)) return setErr('Gå med i gruppen först – eller välj en annan grupp.');
     if (limit && !visibleTo.length) return setErr('Välj minst en grupp som ska se inlägget, eller välj Alla.');
     if (isPersonal && checkHome(where)) return setErr(checkHome(where).replace('du håller till i', 'inlägget gäller'));
+    if (!isPersonal && groupWhere && checkHome(groupWhere)) return setErr(checkHome(groupWhere).replace('du håller till i', 'inlägget gäller'));
     setBusy(true);
     try {
       const payload = {
-        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : null, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], reach: limit ? null : reachLvl, caption, tags,
+        type: type === 'evenemang' ? 'vanlig' : type, groupId: isPersonal ? null : groupId, place: isPersonal ? where : groupWhere, asGroup: !isPersonal && asGroup && s.adminOf.has(groupId), visibleTo: limit ? visibleTo : [], reach: limit ? null : reachLvl, caption, tags,
         slides: slides.map(({ id, file, image_url, media_type, text }) => ({ id, file, image_url, media_type, text })),
         stance, amount, deadline,
         space: type === 'lokal' ? { functions, cost, price } : null,
@@ -549,14 +554,14 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
           <div class="set-label">Relaterar till</div>
           <div class="set-body">
           <div class="rel-choice" role="radiogroup" aria-label="Relaterar till">
-            <button type="button" role="radio" aria-checked=${isPersonal} class=${'rel-opt' + (isPersonal ? ' on' : '')} onClick=${() => { setPersonal(true); setAsGroup(false); }}>
+            <button type="button" role="radio" aria-checked=${isPersonal} class=${'rel-opt' + (isPersonal ? ' on' : '')} onClick=${() => { setPersonal(true); setAsGroup(false); setEditPlace(false); }}>
               <${Avatar} src=${s.me.avatar_url} name=${s.me.name} size=${28} /><strong>Fristående post (ingen grupp)</strong><span class="rel-dot"></span></button>
             ${noGroups ? html`<a class="rel-opt" href="#/sok?flik=grupper"><span class="rel-icon">+</span><strong>Gå med i en grupp för att posta där</strong></a>`
             : isPersonal ? (() => { const g = groupById(groupId) || myGroups[0]; return html`<button type="button" role="radio" aria-checked=${false} class="rel-opt"
-                onClick=${() => { groupTouched.current = true; setPersonal(false); setGroupId(g.id); }}>
+                onClick=${() => { groupTouched.current = true; setPersonal(false); setGroupId(g.id); setEditPlace(false); }}>
                 <${Avatar} src=${g.avatar_url} name=${g.name} size=${28} /><strong>${g.name}</strong><span class="rel-dot"></span></button>`; })()
             : html`<div class="rel-opt on rel-group" role="radio" aria-checked="true"><${GroupPicker} groups=${myGroups} others=${placeGroups.data || []} value=${groupId}
-                onChange=${(id) => { groupTouched.current = true; setGroupId(id); setPersonal(false); setAsGroup(false); }} /></div>`}
+                onChange=${(id) => { groupTouched.current = true; setGroupId(id); setPersonal(false); setAsGroup(false); setGroupWhere(null); setEditPlace(false); }} /></div>`}
           </div>
           ${!isPersonal && groupId && !s.memberOf.has(groupId) && (() => { const g = (placeGroups.data || []).find((x) => x.id === groupId); return html`<div class="nudge join-first">
             <span>Du är inte med i <b>${g?.name || 'gruppen'}</b>. Gå med för att kunna posta där.</span>
@@ -572,10 +577,13 @@ export function Compose({ groupId: initialGroup, type: initialType, stance: init
         </div>
 
         <div class="set-row">
-          <div class="set-label set-label-row"><span>Relevant för</span>${isPersonal && !placeMissing && html`<button type="button" class="link subtle"
+          <div class="set-label set-label-row"><span>Relevant för</span>${(!isPersonal || !placeMissing) && html`<button type="button" class="link subtle"
             onClick=${() => setEditPlace((x) => !x)}>${editPlace ? 'Klar' : 'Ändra plats'}</button>`}</div>
           <div class="set-body">
             ${isPersonal && (editPlace || placeMissing) && html`<${HomePlaceFields} value=${where} onChange=${setWhere} groups=${placeGroups.data} legend=${placeMissing ? 'Var gäller inlägget?' : ''} chooseLevel=${false} />`}
+            ${!isPersonal && editPlace && html`<${HomePlaceFields} key=${groupId} value=${groupWhere || { ...emptyHome(), country: groupPl.country || '', region: groupPl.region || '', city: groupPl.city || '', postcode: groupPl.postcode || null }}
+              onChange=${setGroupWhere} groups=${placeGroups.data} legend="" chooseLevel=${false} />`}
+            ${!isPersonal && groupWhere && html`<small class="muted">Egen plats för det här inlägget. <button type="button" class="link" onClick=${() => { setGroupWhere(null); setEditPlace(false); }}>Använd gruppens plats</button></small>`}
             <div class="reach-pills" role="radiogroup" aria-label="Vilka är inlägget relevant för?">
               ${[...reachOptions].reverse().map(([lvl, label]) => html`<button type="button" role="radio" key=${lvl}
                 aria-checked=${!limit && (reachNow || reachOptions[0][0]) === lvl} class=${!limit && (reachNow || reachOptions[0][0]) === lvl ? 'on' : ''}

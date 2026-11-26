@@ -85,7 +85,8 @@ export function learnCityRegions(rows = []) {
 }
 export function postPlace(p) {
   if (!p) return null;
-  if (p.group) return p.group;
+  // Ett gruppinlägg kan ha en egen plats (bara för det inlägget) – annars gruppens.
+  if (p.group && !p.country && !p.city) return p.group;
   const country = p.country || p.event_country, city = p.city || p.event_city;
   if (!country && !city) return null;
   return { country, city, postcode: p.postcode || p.event_postcode,
@@ -287,7 +288,7 @@ export function normalizePostInput(input) {
     event = { start: start.toISOString(), end: end ? end.toISOString() : null, address: (e.address || '').trim() || null, postcode: e.postcode || null,
       city: e.city || null, region: e.region || null, country: e.country || null, lat: e.lat ?? null, lng: e.lng ?? null, rsvp: e.rsvp !== false };
   }
-  const place = !input.groupId && input.place ? { country: input.place.country || null, region: input.place.region || null, city: input.place.city || null, postcode: input.place.postcode || null } : null;
+  const place = input.place ? { country: input.place.country || null, region: input.place.region || null, city: input.place.city || null, postcode: input.place.postcode || null } : null;
   const visibleTo = [...new Set((input.visibleTo || []).filter(Boolean))];
   const reach = REACH_LEVELS.includes(input.reach) ? input.reach : null;
   return { stance, amount, deadline, reach, visibleTo, place, groupId: input.groupId || null, asGroup: !!(input.asGroup && input.groupId), caption, slides, kind, categories, isResource: kind !== 'vanlig' || categories.length > 0, finance, space, event };
